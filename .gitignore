@@ -1,0 +1,23 @@
+# Rust build artifacts
+src-tauri/target/
+
+# Vite / frontend build output
+dist/
+
+# Node dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
