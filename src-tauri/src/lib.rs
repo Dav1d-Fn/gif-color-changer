@@ -1,7 +1,11 @@
 use base64::{engine::general_purpose, Engine as _};
 use color_quant::NeuQuant;
 use gif::{ColorOutput, DecodeOptions, DisposalMethod, Encoder as GifEncoder, Repeat};
+use rayon::prelude::*;
 use std::borrow::Cow;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use tauri::ipc::Channel;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct RgbColor {
@@ -214,52 +218,91 @@ fn extract_gif_colors(file_path: String, tolerance: u32) -> Result<Vec<RgbColor>
     Ok(result)
 }
 
+#[derive(serde::Serialize, Clone)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ProgressEvent {
+    Decode,
+    Transform { frame: usize, total: usize },
+    Encode   { frame: usize, total: usize },
+}
+
 #[tauri::command]
-fn apply_color_changes(file_path: String, mappings: Vec<ColorMapping>) -> Result<String, String> {
+async fn apply_color_changes(
+    file_path: String,
+    mappings: Vec<ColorMapping>,
+    on_progress: Channel<ProgressEvent>,
+) -> Result<String, String> {
     if mappings.is_empty() {
         return Err("No color mappings provided".to_string());
     }
-    let t = std::time::Instant::now();
 
-    // Pass 1: decode all frames to composited RGBA images
-    let mut decoded = decode_to_rgba_frames(&file_path)?;
-    eprintln!("[bench] decode: {}ms", t.elapsed().as_millis());
+    tauri::async_runtime::spawn_blocking(move || {
+        let t = std::time::Instant::now();
 
-    // Pass 2: apply color changes to each RGBA frame independently
-    let t2 = std::time::Instant::now();
-    for (rgba, _) in &mut decoded.frames {
-        for pixel in rgba.chunks_mut(4) {
-            if pixel[3] == 0 {
-                continue;
-            }
-            let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
-            for m in &mappings {
-                if dist_sq(r, g, b, m.target_r, m.target_g, m.target_b)
-                    <= m.tolerance * m.tolerance
-                {
-                    if m.transparent {
-                        pixel[3] = 0;
-                    } else {
-                        pixel[0] = m.repl_r;
-                        pixel[1] = m.repl_g;
-                        pixel[2] = m.repl_b;
+        // Pass 1: sequentielles Dekodieren (GIF-Decoder nicht thread-safe)
+        let _ = on_progress.send(ProgressEvent::Decode);
+        let mut decoded = decode_to_rgba_frames(&file_path)?;
+        let total = decoded.frames.len();
+        eprintln!("[bench] decode: {}ms  ({} frames)", t.elapsed().as_millis(), total);
+
+        // Pass 2: parallele Farb-Transformation (jeder Frame unabhängig)
+        let t2 = std::time::Instant::now();
+        let counter = Arc::new(AtomicUsize::new(0));
+        decoded.frames.par_iter_mut().for_each(|(rgba, _)| {
+            for pixel in rgba.chunks_mut(4) {
+                if pixel[3] == 0 { continue; }
+                let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
+                for m in &mappings {
+                    if dist_sq(r, g, b, m.target_r, m.target_g, m.target_b)
+                        <= m.tolerance * m.tolerance
+                    {
+                        if m.transparent { pixel[3] = 0; }
+                        else { pixel[0] = m.repl_r; pixel[1] = m.repl_g; pixel[2] = m.repl_b; }
+                        break;
                     }
-                    break;
                 }
             }
-        }
-    }
-    eprintln!("[bench] transform: {}ms", t2.elapsed().as_millis());
+            let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
+            let _ = on_progress.send(ProgressEvent::Transform { frame: done, total });
+        });
+        eprintln!("[bench] transform: {}ms", t2.elapsed().as_millis());
 
-    // Pass 3: re-encode
-    let t3 = std::time::Instant::now();
-    let result = encode_rgba_frames_to_gif(&decoded);
-    eprintln!(
-        "[bench] encode: {}ms  |  apply_color_changes total: {}ms",
-        t3.elapsed().as_millis(),
-        t.elapsed().as_millis()
-    );
-    result
+        // Pass 3a: parallele NeuQuant-Quantisierung (teuerste Operation)
+        let t3 = std::time::Instant::now();
+        let enc_counter = Arc::new(AtomicUsize::new(0));
+        let gif_frames: Vec<gif::Frame<'static>> = decoded.frames
+            .par_iter()
+            .map(|(rgba, delay)| {
+                let frame = rgba_to_gif_frame(rgba, decoded.width, decoded.height, *delay);
+                let done = enc_counter.fetch_add(1, Ordering::Relaxed) + 1;
+                let _ = on_progress.send(ProgressEvent::Encode { frame: done, total });
+                frame
+            })
+            .collect();
+        eprintln!("[bench] quantize: {}ms", t3.elapsed().as_millis());
+
+        // Pass 3b: sequentielles Schreiben in GifEncoder (nicht Send)
+        let t4 = std::time::Instant::now();
+        let dummy_pal = [0u8; 12];
+        let mut output: Vec<u8> = Vec::new();
+        let mut encoder =
+            GifEncoder::new(&mut output, decoded.width, decoded.height, &dummy_pal)
+                .map_err(|e| e.to_string())?;
+        encoder.set_repeat(Repeat::Infinite).map_err(|e| e.to_string())?;
+        for frame in gif_frames {
+            encoder.write_frame(&frame).map_err(|e| e.to_string())?;
+        }
+        drop(encoder);
+        eprintln!("[bench] gif_write: {}ms | total: {}ms",
+            t4.elapsed().as_millis(), t.elapsed().as_millis());
+
+        Ok(format!(
+            "data:image/gif;base64,{}",
+            general_purpose::STANDARD.encode(&output)
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
