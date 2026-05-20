@@ -503,6 +503,49 @@ fn debug_export_frames(file_path: String) -> Result<String, String> {
     Ok(format!("/tmp/gif-debug/  ({} frames, {}×{})", decoded.frames.len(), decoded.width, decoded.height))
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GifInfo {
+    pub width: u32,
+    pub height: u32,
+    pub frame_count: usize,
+}
+
+#[tauri::command]
+fn get_gif_info(file_path: String) -> Result<GifInfo, String> {
+    let file = std::fs::File::open(&file_path).map_err(|e| e.to_string())?;
+    let mut options = DecodeOptions::new();
+    options.set_color_output(ColorOutput::Indexed);
+    let mut decoder = options.read_info(file).map_err(|e| e.to_string())?;
+    let width = decoder.width() as u32;
+    let height = decoder.height() as u32;
+    let mut frame_count = 0usize;
+    while decoder.read_next_frame().map_err(|e| e.to_string())?.is_some() {
+        frame_count += 1;
+    }
+    Ok(GifInfo { width, height, frame_count })
+}
+
+#[tauri::command]
+fn open_path(path: String) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -514,6 +557,8 @@ pub fn run() {
             get_gif_frame_count,
             preview_frame,
             apply_frame,
+            get_gif_info,
+            open_path,
             debug_export_frames,
             debug_roundtrip
         ])

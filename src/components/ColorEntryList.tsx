@@ -59,6 +59,24 @@ function EyeIcon() {
     </svg>
   );
 }
+function ImportIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  );
+}
+function ExportIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+  );
+}
 
 // ── Hex input ─────────────────────────────────────────────────────────────────
 function HexInput({ value, onChange }: { value: string; onChange: (h: string) => void }) {
@@ -483,6 +501,8 @@ interface ColorEntryListProps {
   onToggleEyedropper: () => void;
   gifLoaded: boolean;
   onPreviewUpdate: (entries: ColorEntry[] | null) => void;
+  onImport?: () => void;
+  onExport?: () => void;
 }
 
 export function ColorEntryList({
@@ -490,7 +510,7 @@ export function ColorEntryList({
   onRemove, onUpdate, addPanelOpen, onToggleAddPanel,
   pendingColor, onPendingColorChange, onConfirmAdd,
   eyedropperActive, onToggleEyedropper, gifLoaded,
-  onPreviewUpdate,
+  onPreviewUpdate, onImport, onExport,
 }: ColorEntryListProps) {
 
   function handleEntryLiveState(liveEntry: ColorEntry | null) {
@@ -523,9 +543,23 @@ export function ColorEntryList({
           {t("colors_title")}
           <span className="count">· {entries.length}</span>
         </span>
-        <button className="add-btn" onClick={onToggleAddPanel}>
-          <PlusIcon /> {t("add_color")}
-        </button>
+        <div className="card-head-actions">
+          <button className="icon-btn" title={t("rules_import_tooltip")} onClick={onImport}>
+            <ImportIcon />
+          </button>
+          <button
+            className="icon-btn"
+            title={t("rules_export_tooltip")}
+            onClick={onExport}
+            disabled={entries.length === 0}
+          >
+            <ExportIcon />
+          </button>
+          <div className="card-head-divider" />
+          <button className="add-btn" onClick={onToggleAddPanel}>
+            <PlusIcon /> {t("add_color")}
+          </button>
+        </div>
       </div>
 
       <div className="mapping-list">

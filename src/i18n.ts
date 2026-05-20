@@ -37,7 +37,7 @@ const de = {
   apply_changes:    "Änderungen anwenden",
   save_gif:         "GIF speichern",
   ready_to_save:    "Bereit zum Speichern",
-  save_hint:        'Verfügbar nach „Anwenden“',
+  save_hint:        'Verfügbar nach „Anwenden"',
 
   // notifications
   err_open:         "Fehler beim Öffnen",
@@ -69,6 +69,70 @@ const de = {
   cancel:           "Abbrechen",
   add:              "Hinzufügen",
   confirm:          "Übernehmen",
+
+  // sidebar
+  home_title:           "Home",
+  sidebar_home:         "Home",
+  sidebar_batch:        "Batch",
+  sidebar_settings:     "Einstellungen",
+  lang_switch_tooltip:  "Sprache wechseln",
+
+  // rules I/O
+  rules_import_tooltip: "Regeln importieren (.json)",
+  rules_export_tooltip: "Regeln exportieren (.json)",
+  rules_import_title:   "Regeln importieren",
+  rules_import_body:    "{n} bestehende Regel(n) werden ersetzt. Fortfahren?",
+  rules_import_replace: "Ersetzen",
+  rules_import_add:     "Hinzufügen",
+  rules_import_error:   "Import fehlgeschlagen — kein gültiges Regel-Format.",
+  rules_export_success: "{n} Regeln gespeichert",
+
+  // batch tab
+  batch_title:           "Batch verarbeiten",
+  batch_sub_none:        "0 GIFs ausgewählt",
+  batch_sub:             "{n} GIF(s) ausgewählt · {r} Regel(n) aktiv",
+  batch_add_gifs:        "GIFs hinzufügen",
+  batch_card_files:      "GIFs",
+  batch_remove_all:      "Alle entfernen",
+  batch_drop_hint:       "Oder GIFs hier hineinziehen",
+  batch_empty_label:     "GIFs hierhin ziehen",
+  batch_empty_hint:      'oder über „GIFs hinzufügen" oben rechts auswählen',
+  batch_card_rules:      "Aktive Regeln",
+  batch_rules_note:      "Werden aus dem Home-Tab übernommen. Hier nicht bearbeitbar, aber importierbar / exportierbar.",
+  batch_card_export:     "Export",
+  batch_dest_folder:     "Ziel-Ordner",
+  batch_browse:          "Durchsuchen",
+  batch_schema:          "Datei-Schema",
+  batch_schema_help:     "Beispiel: {example}",
+  batch_process_btn:     "Verarbeiten",
+  batch_process_sub:     "{n} GIF(s) · {f} Frames · ~{s} Sek.",
+  batch_open_folder:     "Im Ziel-Ordner öffnen",
+  batch_open_sub_wait:   "Nach Abschluss aktivierbar",
+  batch_open_sub_done:   "{n} Datei(en) geschrieben",
+  batch_status_idle:     "Bereit",
+  batch_status_proc:     "Wird verarbeitet…",
+  batch_status_done:     "Fertig",
+  batch_status_error:    "Fehler",
+  batch_err_no_folder:   "Bitte Ziel-Ordner auswählen",
+  batch_invalid_gif:     "Keine gültige GIF-Datei",
+  batch_done_toast:      "Batch abgeschlossen — {n} Datei(en) gespeichert",
+
+  // settings tab
+  settings_title:             "Allgemein",
+  settings_auto_saved:        "Werden automatisch gespeichert",
+  settings_lang:              "Sprache",
+  settings_default_tol:       "Standard-Toleranz",
+  settings_live_preview_default: "Live-Preview Standard",
+  settings_export_folder:     "Standard-Export-Ordner",
+  settings_file_schema:       "Datei-Schema",
+  settings_overwrite:         "Original überschreiben",
+  settings_overwrite_ask:     "Nachfragen",
+  settings_overwrite_replace: "Überschreiben",
+  settings_overwrite_rename:  "Umbenennen",
+  settings_about_name:        "GIF Color Changer",
+  settings_about_version:     "Version 1.2.0",
+  settings_about_tagline:     "Ersetze Farben in animierten GIFs — lokal, schnell, ohne Cloud.",
+  settings_about_copyright:   "© 2026 · Lokale Anwendung · keine Daten verlassen dein Gerät",
 };
 
 type Keys = keyof typeof de;
@@ -134,13 +198,106 @@ const en: Record<Keys, string> = {
   cancel:           "Cancel",
   add:              "Add",
   confirm:          "Apply",
+
+  home_title:           "Home",
+  sidebar_home:         "Home",
+  sidebar_batch:        "Batch",
+  sidebar_settings:     "Settings",
+  lang_switch_tooltip:  "Switch language",
+
+  rules_import_tooltip: "Import rules (.json)",
+  rules_export_tooltip: "Export rules (.json)",
+  rules_import_title:   "Import rules",
+  rules_import_body:    "{n} existing rule(s) will be replaced. Continue?",
+  rules_import_replace: "Replace",
+  rules_import_add:     "Add",
+  rules_import_error:   "Import failed — not a valid rules file.",
+  rules_export_success: "{n} rules saved",
+
+  batch_title:           "Batch Process",
+  batch_sub_none:        "0 GIFs selected",
+  batch_sub:             "{n} GIF(s) selected · {r} rule(s) active",
+  batch_add_gifs:        "Add GIFs",
+  batch_card_files:      "GIFs",
+  batch_remove_all:      "Remove all",
+  batch_drop_hint:       "Or drag GIFs here",
+  batch_empty_label:     "Drag GIFs here",
+  batch_empty_hint:      'or select via "Add GIFs" above',
+  batch_card_rules:      "Active Rules",
+  batch_rules_note:      "Taken from the Home tab. Cannot be edited here, but can be imported / exported.",
+  batch_card_export:     "Export",
+  batch_dest_folder:     "Target Folder",
+  batch_browse:          "Browse",
+  batch_schema:          "File Schema",
+  batch_schema_help:     "Example: {example}",
+  batch_process_btn:     "Process",
+  batch_process_sub:     "{n} GIF(s) · {f} frames · ~{s} sec.",
+  batch_open_folder:     "Open in target folder",
+  batch_open_sub_wait:   "Available after processing",
+  batch_open_sub_done:   "{n} file(s) written",
+  batch_status_idle:     "Ready",
+  batch_status_proc:     "Processing…",
+  batch_status_done:     "Done",
+  batch_status_error:    "Error",
+  batch_err_no_folder:   "Please select a target folder",
+  batch_invalid_gif:     "Not a valid GIF file",
+  batch_done_toast:      "Batch complete — {n} file(s) saved",
+
+  settings_title:             "General",
+  settings_auto_saved:        "Saved automatically",
+  settings_lang:              "Language",
+  settings_default_tol:       "Default Tolerance",
+  settings_live_preview_default: "Live Preview Default",
+  settings_export_folder:     "Default Export Folder",
+  settings_file_schema:       "File Schema",
+  settings_overwrite:         "Overwrite original",
+  settings_overwrite_ask:     "Ask",
+  settings_overwrite_replace: "Overwrite",
+  settings_overwrite_rename:  "Rename",
+  settings_about_name:        "GIF Color Changer",
+  settings_about_version:     "Version 1.2.0",
+  settings_about_tagline:     "Replace colors in animated GIFs — local, fast, no cloud.",
+  settings_about_copyright:   "© 2026 · Local application · no data leaves your device",
 };
 
-const lang = navigator.language.startsWith("de") ? "de" : "en";
-const strings = lang === "de" ? de : en;
+const fr: Record<Keys, string> = { ...en,
+  home_title:       "Accueil",
+  sidebar_home:     "Accueil",
+  sidebar_settings: "Paramètres",
+  lang_switch_tooltip: "Changer de langue",
+  settings_lang:    "Langue",
+};
+
+const es: Record<Keys, string> = { ...en,
+  home_title:       "Inicio",
+  sidebar_home:     "Inicio",
+  sidebar_settings: "Ajustes",
+  lang_switch_tooltip: "Cambiar idioma",
+  settings_lang:    "Idioma",
+};
+
+const allStrings: Record<string, Record<Keys, string>> = { de, en, fr, es };
+
+let activeLang: "de" | "en" | "fr" | "es" = "en";
+let strings: Record<Keys, string> = en;
+let reRenderCallback: (() => void) | null = null;
+
+export function setLanguage(lang: "de" | "en" | "fr" | "es") {
+  activeLang = lang;
+  strings = allStrings[lang] ?? en;
+  reRenderCallback?.();
+}
+
+export function getActiveLang(): "de" | "en" | "fr" | "es" {
+  return activeLang;
+}
+
+export function registerLangCallback(cb: () => void) {
+  reRenderCallback = cb;
+}
 
 export function t(key: Keys, params?: Record<string, string | number>): string {
-  let s = strings[key];
+  let s = strings[key] ?? en[key] ?? key;
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       s = s.replace(`{${k}}`, String(v));

@@ -15,6 +15,8 @@
         "title": "GIF Color Changer",
         "width": 1200,
         "height": 830,
+        "minWidth": 1200,
+        "minHeight": 820,
         "resizable": true,
         "decorations": false
       }
