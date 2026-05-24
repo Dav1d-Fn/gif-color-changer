@@ -5,10 +5,11 @@ import { t } from "../i18n";
 
 export interface ColorEntry {
   id: string;
-  sourceHex: string;
+  sourceHexes: string[];
   replHex: string;
   transparent: boolean;
   tolerance: number;
+  border: number; // 0–50 → 0.0%–5.0% of min(width,height)
 }
 
 export interface RgbColor {
@@ -78,14 +79,172 @@ function ExportIcon() {
   );
 }
 
+// ── Source Color Step 1 (Chip Tray) ──────────────────────────────────────────
+interface SourceColorStep1Props {
+  gifColors: RgbColor[];
+  colorsLoading: boolean;
+  pendingColors: string[];
+  onToggle: (hex: string) => void;
+  gifTolerance: number;
+  onGifToleranceChange: (v: number) => void;
+  onGifToleranceEnd: (v: number) => void;
+  eyedropperActive: boolean;
+  onToggleEyedropper: () => void;
+  gifLoaded: boolean;
+  onCancel: () => void;
+  cancelLabel: string;
+  onNext: () => void;
+}
+
+function SourceColorStep1({
+  gifColors, colorsLoading, pendingColors, onToggle,
+  gifTolerance, onGifToleranceChange, onGifToleranceEnd,
+  eyedropperActive, onToggleEyedropper, gifLoaded,
+  onCancel, cancelLabel, onNext,
+}: SourceColorStep1Props) {
+  const [draftHex, setDraftHex] = useState("#ff0000");
+  const [draftError, setDraftError] = useState(false);
+  const [flashHex, setFlashHex] = useState<string | null>(null);
+  const draftInputRef = useRef<HTMLInputElement>(null);
+
+  function handleAdd() {
+    let hex = draftHex.trim();
+    if (!hex.startsWith("#")) hex = "#" + hex;
+    if (!isValidHex(hex)) { setDraftError(true); return; }
+    hex = hex.toLowerCase();
+    if (pendingColors.includes(hex)) {
+      setFlashHex(hex);
+      setTimeout(() => setFlashHex(null), 600);
+      return;
+    }
+    onToggle(hex);
+    setDraftError(false);
+  }
+
+  return (
+    <div className="sc-panel">
+      {/* ── Header ── */}
+      <div className="sc-head">
+        <span className="sc-title">{t("choose_source")}</span>
+        <div className="gif-tol-row">
+          <span className="gif-tol-label">{t("gif_tolerance")}</span>
+          <RangeSlider
+            min={30} max={100}
+            value={gifTolerance}
+            onChange={onGifToleranceChange}
+            onChangeEnd={onGifToleranceEnd}
+          />
+          <span className="slider-num" style={{ minWidth: 28 }}>{gifTolerance}</span>
+        </div>
+      </div>
+
+      {/* ── Detected colors ── */}
+      <div className="sc-section">
+        <div className="micro-label">
+          DETECTED IN GIF
+          <span className="micro-hint">· klicken zum Auswählen</span>
+        </div>
+        {colorsLoading
+          ? <div style={{ display: "flex", padding: "8px 0" }}><Loader size="sm" /></div>
+          : <div className="pal-palette">
+              {gifColors.map((c, i) => {
+                const hex = rgbToHex(c);
+                const sel = pendingColors.includes(hex);
+                return (
+                  <div
+                    key={i}
+                    className={`pal-swatch${sel ? " selected" : ""}`}
+                    style={{ backgroundColor: hex }}
+                    title={hex}
+                    onClick={() => onToggle(hex)}
+                  />
+                );
+              })}
+            </div>
+        }
+      </div>
+
+      {/* ── Selected sources tray ── */}
+      <div className="sc-section">
+        <div className="micro-label">
+          SELECTED SOURCES
+          {pendingColors.length > 0 && (
+            <span className="count-pill">{pendingColors.length}</span>
+          )}
+        </div>
+        <div className={`chip-tray${pendingColors.length > 0 ? " has-items" : ""}`}>
+          {pendingColors.length === 0
+            ? <span className="tray-empty">Noch keine Farbe ausgewählt — klicke oben oder picke aus dem GIF</span>
+            : pendingColors.map(hex => (
+                <div key={hex} className={`chip${flashHex === hex ? " chip--flash" : ""}`}>
+                  <div className="chip-sw" style={{ backgroundColor: hex }} />
+                  <span className="chip-hex">{hex.toUpperCase()}</span>
+                  <button className="chip-x" onClick={() => onToggle(hex)}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M2 2l6 6M8 2l-6 6"/>
+                    </svg>
+                  </button>
+                </div>
+              ))
+          }
+        </div>
+      </div>
+
+      {/* ── Hex input + pick button ── */}
+      <div className="sc-input-row">
+        <div className={`hex-row${draftError ? " has-error" : ""}`}>
+          <div className="hex-row-preview" style={{ backgroundColor: isValidHex(draftHex) ? draftHex : "#333" }} />
+          <input
+            ref={draftInputRef}
+            className="hex-row-input"
+            value={draftHex}
+            placeholder="#rrggbb"
+            onChange={e => { setDraftHex(e.currentTarget.value); setDraftError(false); }}
+            onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+          />
+          <button className="hex-row-add" onClick={handleAdd}>
+            <span className="add-plus">+</span>
+            Hinzufügen
+          </button>
+        </div>
+        <button
+          className={`pick-btn${eyedropperActive ? " active" : ""}`}
+          disabled={!gifLoaded}
+          onClick={onToggleEyedropper}
+        >
+          <EyeIcon />
+          {t("pick_from_gif")}
+        </button>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="sc-foot">
+        <button className="sc-btn-cancel" onClick={onCancel}>{cancelLabel}</button>
+        <button
+          className={`sc-btn-next${pendingColors.length === 0 ? " disabled" : ""}`}
+          disabled={pendingColors.length === 0}
+          onClick={() => { if (eyedropperActive) onToggleEyedropper(); onNext(); }}
+        >
+          {t("next")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Hex input ─────────────────────────────────────────────────────────────────
-function HexInput({ value, onChange }: { value: string; onChange: (h: string) => void }) {
+function HexInput({ value, onChange, onAdd }: { value: string; onChange: (h: string) => void; onAdd?: (h: string) => void }) {
   const [raw, setRaw] = useState(value);
   if (isValidHex(value) && value !== raw) setRaw(value);
   const error = raw.length > 0 && !isValidHex(raw);
   return (
     <div className="hex-input-row">
-      <div className="hex-preview" style={{ backgroundColor: isValidHex(raw) ? raw : "#000" }} />
+      <div
+        className="hex-preview"
+        style={{ backgroundColor: isValidHex(raw) ? raw : "#000", ...(onAdd ? { cursor: "pointer" } : {}) }}
+        title={onAdd ? "Zur Auswahl hinzufügen" : undefined}
+        onClick={onAdd && isValidHex(raw) ? () => onAdd(raw) : undefined}
+      />
       <input
         className={`hex-input${error ? " error" : ""}`}
         value={raw}
@@ -113,33 +272,44 @@ interface EntryRowProps {
   eyedropperActive: boolean;
   onToggleEyedropper: () => void;
   gifLoaded: boolean;
-  pendingColor: string;
-  onPendingColorChange: (hex: string) => void;
+  gifMinDim: number | null;
+  pendingColors: string[];
+  onTogglePendingColor: (hex: string) => void;
+  onSetPendingColors: (hexes: string[]) => void;
 }
 
 function EntryRow({
   entry, onRemove, onUpdate, onLiveState,
-  eyedropperActive, onToggleEyedropper, gifLoaded,
-  pendingColor, onPendingColorChange,
-  gifColors, colorsLoading,
+  eyedropperActive, onToggleEyedropper, gifLoaded, gifMinDim,
+  pendingColors, onTogglePendingColor, onSetPendingColors,
+  gifColors, colorsLoading, gifTolerance, onGifToleranceChange,
 }: EntryRowProps) {
+  function borderLabel(b: number) {
+    const pct = (b * 0.1).toFixed(1) + "%";
+    if (!gifMinDim) return pct;
+    const px = Math.round(b * 0.1 / 100 * gifMinDim);
+    return `${pct} (≈${px}px)`;
+  }
+
   const [editing, setEditing] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [localReplHexa, setLocalReplHexa] = useState(entry.replHex + "ff");
   const localReplHexaRef = useRef(entry.replHex + "ff");
   const [localTransparent, setLocalTransparent] = useState(entry.transparent);
   const [localTol, setLocalTol] = useState(entry.tolerance);
+  const [localBorder, setLocalBorder] = useState(entry.border);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const replHexRgb = localReplHexa.slice(0, 7);
 
-  function fireLive(overrides?: Partial<Pick<ColorEntry, "replHex"|"transparent"|"tolerance"|"sourceHex">>) {
+  function fireLive(overrides?: Partial<Pick<ColorEntry, "replHex"|"transparent"|"tolerance"|"border">>) {
     onLiveState?.({
       id: entry.id,
-      sourceHex: overrides?.sourceHex ?? pendingColor,
+      sourceHexes: pendingColors,
       replHex: overrides?.replHex ?? localReplHexaRef.current.slice(0, 7),
       transparent: overrides?.transparent ?? localTransparent,
       tolerance: overrides?.tolerance ?? localTol,
+      border: overrides?.border ?? localBorder,
     });
   }
 
@@ -155,17 +325,19 @@ function EntryRow({
     localReplHexaRef.current = entry.replHex + "ff";
     setLocalTransparent(entry.transparent);
     setLocalTol(entry.tolerance);
-    onPendingColorChange(entry.sourceHex);
+    setLocalBorder(entry.border);
+    onSetPendingColors(entry.sourceHexes);
     setStep(2);
     setEditing(true);
   }
 
   function handleDone() {
     onUpdate({
-      sourceHex: pendingColor,
+      sourceHexes: pendingColors,
       replHex: localReplHexaRef.current.slice(0, 7),
       transparent: localTransparent,
       tolerance: localTol,
+      border: localBorder,
     });
     onLiveState?.(null);
     setEditing(false);
@@ -180,12 +352,16 @@ function EntryRow({
     return (
       <div className="mapping">
         <div className="mapping-row">
-          <Swatch hex={entry.sourceHex} />
-          <span className="hex-label">{entry.sourceHex.toUpperCase()}</span>
+          {entry.sourceHexes.map(hex => <Swatch key={hex} hex={hex} />)}
+          <span className="hex-label">
+            {entry.sourceHexes.length === 1
+              ? entry.sourceHexes[0].toUpperCase()
+              : `${entry.sourceHexes.length} Farben`}
+          </span>
           <span className="arrow">→</span>
           {entry.transparent ? <TransparentSwatch /> : <Swatch hex={entry.replHex} />}
           <span className="hex-label">{entry.transparent ? "transparent" : entry.replHex.toUpperCase()}</span>
-          <span className="row-meta" style={{ marginLeft: 10 }}>{t("tol_prefix")} {entry.tolerance}</span>
+          <span className="row-meta" style={{ marginLeft: 10 }}>{t("tol_prefix")} {entry.tolerance}{entry.border > 0 ? ` · ${(entry.border * 0.1).toFixed(1)}%` : ""}</span>
         </div>
         <div className="mapping-actions">
           <button className="icon-btn" title={t("btn_edit")} onClick={openEdit}><EditIcon /></button>
@@ -195,55 +371,26 @@ function EntryRow({
     );
   }
 
-  function closeEdit() { onLiveState?.(null); setEditing(false); }
+  function closeEdit() { onSetPendingColors([]); onLiveState?.(null); setEditing(false); }
 
   if (step === 1) {
     return (
       <div className="mapping editing">
-        <div className="step1-body">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <span className="option-label">{t("choose_source")}</span>
-          </div>
-
-          {colorsLoading
-            ? <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}><Loader size="sm" /></div>
-            : gifColors.length > 0 && (
-              <div className="palette-row">
-                {gifColors.map((c, i) => {
-                  const hex = rgbToHex(c);
-                  return (
-                    <div
-                      key={i}
-                      className={`swatch-sm${pendingColor === hex ? " active" : ""}`}
-                      style={{ backgroundColor: hex }}
-                      title={hex}
-                      onClick={() => onPendingColorChange(hex)}
-                    />
-                  );
-                })}
-              </div>
-            )
-          }
-
-          <HexInput value={pendingColor} onChange={onPendingColorChange} />
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              className={`eyedrop-btn${eyedropperActive ? " active" : ""}`}
-              disabled={!gifLoaded}
-              onClick={onToggleEyedropper}
-            >
-              <EyeIcon /> {t("pick_from_gif")}
-            </button>
-          </div>
-
-          <div className="edit-actions">
-            <button className="btn btn-ghost" onClick={closeEdit}><BackIcon /> {t("back")}</button>
-            <button className="btn btn-accent" onClick={() => { if (eyedropperActive) onToggleEyedropper(); setStep(2); }}>
-              {t("next")}
-            </button>
-          </div>
-        </div>
+        <SourceColorStep1
+          gifColors={gifColors}
+          colorsLoading={colorsLoading}
+          pendingColors={pendingColors}
+          onToggle={onTogglePendingColor}
+          gifTolerance={gifTolerance}
+          onGifToleranceChange={() => {}}
+          onGifToleranceEnd={onGifToleranceChange}
+          eyedropperActive={eyedropperActive}
+          onToggleEyedropper={onToggleEyedropper}
+          gifLoaded={gifLoaded}
+          onCancel={closeEdit}
+          cancelLabel={t("back")}
+          onNext={() => setStep(2)}
+        />
       </div>
     );
   }
@@ -252,8 +399,10 @@ function EntryRow({
     <div className="mapping editing">
       {/* top mapping row */}
       <div className="edit-mapping-row">
-        <Swatch hex={pendingColor} />
-        <span className="hex-label">{pendingColor.toUpperCase()}</span>
+        {pendingColors.map(hex => <Swatch key={hex} hex={hex} />)}
+        <span className="hex-label muted" style={{ fontSize: "0.75em" }}>
+          {pendingColors.length === 1 ? pendingColors[0].toUpperCase() : `${pendingColors.length} Farben`}
+        </span>
         <span className="arrow">→</span>
         {localTransparent ? <TransparentSwatch /> : <Swatch hex={replHexRgb} />}
         <span className={`hex-label${localTransparent ? " muted" : ""}`}>
@@ -292,9 +441,26 @@ function EntryRow({
           <div className="slider-group">
             <RangeSlider
               value={localTol}
-              onChange={v => { setLocalTol(v); fireLive({ tolerance: v }); }}
+              onChange={setLocalTol}
+              onChangeEnd={v => fireLive({ tolerance: v })}
             />
             <span className="slider-num">{localTol}</span>
+          </div>
+        </div>
+
+        <div className="option-row">
+          <div>
+            <span className="option-label">{t("border")}</span>
+            <span className="option-hint"> — {t("border_hint")}</span>
+          </div>
+          <div className="slider-group">
+            <RangeSlider
+              value={localBorder}
+              min={0} max={50}
+              onChange={setLocalBorder}
+              onChangeEnd={v => fireLive({ border: v })}
+            />
+            <span className="slider-num">{borderLabel(localBorder)}</span>
           </div>
         </div>
       </div>
@@ -314,8 +480,9 @@ function EntryRow({
 
 // ── Add panel ─────────────────────────────────────────────────────────────────
 interface AddPanelProps {
-  pendingColor: string;
-  onPendingColorChange: (hex: string) => void;
+  pendingColors: string[];
+  onTogglePendingColor: (hex: string) => void;
+  onSetPendingColors: (hexes: string[]) => void;
   gifColors: RgbColor[];
   colorsLoading: boolean;
   gifTolerance: number;
@@ -323,32 +490,41 @@ interface AddPanelProps {
   eyedropperActive: boolean;
   onToggleEyedropper: () => void;
   gifLoaded: boolean;
-  onConfirm: (replHex: string, transparent: boolean, tolerance: number) => void;
+  onConfirm: (replHex: string, transparent: boolean, tolerance: number, border: number) => void;
   onCancel: () => void;
-  onLivePreview?: (replHex: string, transparent: boolean, tolerance: number) => void;
+  onLivePreview?: (replHex: string, transparent: boolean, tolerance: number, border: number) => void;
+  gifMinDim: number | null;
 }
 
 function AddPanel({
-  pendingColor, onPendingColorChange,
+  pendingColors, onTogglePendingColor,
   gifColors, colorsLoading, gifTolerance, onGifToleranceChange,
   eyedropperActive, onToggleEyedropper, gifLoaded,
-  onConfirm, onCancel, onLivePreview,
+  onConfirm, onCancel, onLivePreview, gifMinDim,
 }: AddPanelProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [replHexa, setReplHexa] = useState("#ff0000ff");
   const replHexaRef = useRef("#ff0000ff");
   const [transparent, setTransparent] = useState(false);
   const [tol, setTol] = useState(20);
+  const [border, setBorder] = useState(3);
+  function borderLabel(b: number) {
+    const pct = (b * 0.1).toFixed(1) + "%";
+    if (!gifMinDim) return pct;
+    const px = Math.round(b * 0.1 / 100 * gifMinDim);
+    return `${pct} (≈${px}px)`;
+  }
   const [localGifTol, setLocalGifTol] = useState(gifTolerance);
   const liveDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const replHexRgb = replHexa.slice(0, 7);
 
-  function fireLive(overrides?: { replHex?: string; transparent?: boolean; tolerance?: number }) {
+  function fireLive(overrides?: { replHex?: string; transparent?: boolean; tolerance?: number; border?: number }) {
     const rh  = overrides?.replHex     ?? replHexaRef.current.slice(0, 7);
     const tr  = overrides?.transparent ?? transparent;
     const tl  = overrides?.tolerance   ?? tol;
-    onLivePreview?.(rh, tr, tl);
+    const bd  = overrides?.border      ?? border;
+    onLivePreview?.(rh, tr, tl, bd);
   }
 
   function updateReplHexa(v: string) {
@@ -363,66 +539,26 @@ function AddPanel({
     fireLive({ transparent: v });
   }
 
-  function handleTolChange(v: number) {
-    setTol(v);
-    fireLive({ tolerance: v });
-  }
+  function handleTolChange(v: number) { setTol(v); }
 
   if (step === 1) {
     return (
       <div className="add-panel">
-        <div className="step1-body">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <span className="option-label">{t("choose_source")}</span>
-            <div className="gif-tol-row">
-              <span className="gif-tol-label">{t("gif_tolerance")}</span>
-              <RangeSlider min={30} max={100} value={localGifTol}
-                onChange={setLocalGifTol}
-                onChangeEnd={v => { setLocalGifTol(v); onGifToleranceChange(v); }}
-              />
-              <span className="slider-num" style={{ minWidth: 28 }}>{localGifTol}</span>
-            </div>
-          </div>
-
-          {colorsLoading
-            ? <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}><Loader size="sm" /></div>
-            : gifColors.length > 0 && (
-              <div className="palette-row">
-                {gifColors.map((c, i) => {
-                  const hex = rgbToHex(c);
-                  return (
-                    <div
-                      key={i}
-                      className={`swatch-sm${pendingColor === hex ? " active" : ""}`}
-                      style={{ backgroundColor: hex }}
-                      title={hex}
-                      onClick={() => onPendingColorChange(hex)}
-                    />
-                  );
-                })}
-              </div>
-            )
-          }
-
-          <HexInput value={pendingColor} onChange={onPendingColorChange} />
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              className={`eyedrop-btn${eyedropperActive ? " active" : ""}`}
-              disabled={!gifLoaded}
-              onClick={onToggleEyedropper}
-            >
-              <EyeIcon /> {t("pick_from_gif")}
-            </button>
-          </div>
-
-          <div className="edit-actions">
-            <button className="btn btn-ghost" onClick={onCancel}>{t("cancel")}</button>
-            <button className="btn btn-accent" onClick={() => { if (eyedropperActive) onToggleEyedropper(); setStep(2); }}>
-              {t("next")}
-            </button>
-          </div>
-        </div>
+        <SourceColorStep1
+          gifColors={gifColors}
+          colorsLoading={colorsLoading}
+          pendingColors={pendingColors}
+          onToggle={onTogglePendingColor}
+          gifTolerance={localGifTol}
+          onGifToleranceChange={setLocalGifTol}
+          onGifToleranceEnd={v => { setLocalGifTol(v); onGifToleranceChange(v); }}
+          eyedropperActive={eyedropperActive}
+          onToggleEyedropper={onToggleEyedropper}
+          gifLoaded={gifLoaded}
+          onCancel={onCancel}
+          cancelLabel={t("cancel")}
+          onNext={() => setStep(2)}
+        />
       </div>
     );
   }
@@ -431,8 +567,10 @@ function AddPanel({
     <div className="add-panel">
       {/* mapping preview row */}
       <div className="edit-mapping-row">
-        <Swatch hex={pendingColor} />
-        <span className="hex-label">{pendingColor.toUpperCase()}</span>
+        {pendingColors.map(hex => <Swatch key={hex} hex={hex} />)}
+        <span className="hex-label muted" style={{ fontSize: "0.75em" }}>
+          {pendingColors.length === 1 ? pendingColors[0].toUpperCase() : `${pendingColors.length} Farben`}
+        </span>
         <span className="arrow">→</span>
         {transparent ? <TransparentSwatch /> : <Swatch hex={replHexRgb} />}
         <span className={`hex-label${transparent ? " muted" : ""}`}>
@@ -464,8 +602,19 @@ function AddPanel({
             <span className="option-hint"> — {t("tolerance_hint")}</span>
           </div>
           <div className="slider-group">
-            <RangeSlider value={tol} onChange={handleTolChange} />
+            <RangeSlider value={tol} onChange={handleTolChange} onChangeEnd={v => fireLive({ tolerance: v })} />
             <span className="slider-num">{tol}</span>
+          </div>
+        </div>
+
+        <div className="option-row">
+          <div>
+            <span className="option-label">{t("border")}</span>
+            <span className="option-hint"> — {t("border_hint")}</span>
+          </div>
+          <div className="slider-group">
+            <RangeSlider value={border} min={0} max={50} onChange={setBorder} onChangeEnd={v => fireLive({ border: v })} />
+            <span className="slider-num">{borderLabel(border)}</span>
           </div>
         </div>
       </div>
@@ -474,7 +623,7 @@ function AddPanel({
         <button className="btn btn-ghost" onClick={() => setStep(1)}><BackIcon /> {t("back")}</button>
         <div className="edit-actions-right">
           <button className="btn btn-ghost" onClick={onCancel}>{t("cancel")}</button>
-          <button className="btn btn-accent" onClick={() => onConfirm(replHexaRef.current.slice(0, 7), transparent, tol)}>
+          <button className="btn btn-accent" onClick={() => onConfirm(replHexaRef.current.slice(0, 7), transparent, tol, border)}>
             {t("add")}
           </button>
         </div>
@@ -494,12 +643,14 @@ interface ColorEntryListProps {
   onUpdate: (id: string, changes: Partial<Omit<ColorEntry, "id">>) => void;
   addPanelOpen: boolean;
   onToggleAddPanel: () => void;
-  pendingColor: string;
-  onPendingColorChange: (hex: string) => void;
-  onConfirmAdd: (replHex: string, transparent: boolean, tolerance: number) => void;
+  pendingColors: string[];
+  onTogglePendingColor: (hex: string) => void;
+  onSetPendingColors: (hexes: string[]) => void;
+  onConfirmAdd: (replHex: string, transparent: boolean, tolerance: number, border: number) => void;
   eyedropperActive: boolean;
   onToggleEyedropper: () => void;
   gifLoaded: boolean;
+  gifMinDim: number | null;
   onPreviewUpdate: (entries: ColorEntry[] | null) => void;
   onImport?: () => void;
   onExport?: () => void;
@@ -508,8 +659,8 @@ interface ColorEntryListProps {
 export function ColorEntryList({
   entries, gifColors, colorsLoading, tolerance, onToleranceChange,
   onRemove, onUpdate, addPanelOpen, onToggleAddPanel,
-  pendingColor, onPendingColorChange, onConfirmAdd,
-  eyedropperActive, onToggleEyedropper, gifLoaded,
+  pendingColors, onTogglePendingColor, onSetPendingColors, onConfirmAdd,
+  eyedropperActive, onToggleEyedropper, gifLoaded, gifMinDim,
   onPreviewUpdate, onImport, onExport,
 }: ColorEntryListProps) {
 
@@ -521,13 +672,13 @@ export function ColorEntryList({
     }
   }
 
-  function handleAddLivePreview(replHex: string, transparent: boolean, tolerance: number) {
-    const virtualEntry: ColorEntry = { id: "__add__", sourceHex: pendingColor, replHex, transparent, tolerance };
+  function handleAddLivePreview(replHex: string, transparent: boolean, tolerance: number, border: number) {
+    const virtualEntry: ColorEntry = { id: "__add__", sourceHexes: pendingColors, replHex, transparent, tolerance, border };
     onPreviewUpdate([...entries, virtualEntry]);
   }
 
-  function handleConfirm(replHex: string, transparent: boolean, tol: number) {
-    onConfirmAdd(replHex, transparent, tol);
+  function handleConfirm(replHex: string, transparent: boolean, tol: number, border: number) {
+    onConfirmAdd(replHex, transparent, tol, border);
     onPreviewUpdate(null);
   }
 
@@ -581,15 +732,18 @@ export function ColorEntryList({
             eyedropperActive={eyedropperActive}
             onToggleEyedropper={onToggleEyedropper}
             gifLoaded={gifLoaded}
-            pendingColor={pendingColor}
-            onPendingColorChange={onPendingColorChange}
+            gifMinDim={gifMinDim}
+            pendingColors={pendingColors}
+            onTogglePendingColor={onTogglePendingColor}
+            onSetPendingColors={onSetPendingColors}
           />
         ))}
 
         {addPanelOpen && (
           <AddPanel
-            pendingColor={pendingColor}
-            onPendingColorChange={onPendingColorChange}
+            pendingColors={pendingColors}
+            onTogglePendingColor={onTogglePendingColor}
+            onSetPendingColors={onSetPendingColors}
             gifColors={gifColors}
             colorsLoading={colorsLoading}
             gifTolerance={tolerance}
@@ -597,6 +751,7 @@ export function ColorEntryList({
             eyedropperActive={eyedropperActive}
             onToggleEyedropper={onToggleEyedropper}
             gifLoaded={gifLoaded}
+            gifMinDim={gifMinDim}
             onConfirm={handleConfirm}
             onCancel={handleCancel}
             onLivePreview={handleAddLivePreview}

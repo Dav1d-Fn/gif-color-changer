@@ -21,6 +21,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Exported rules files (local test exports)
-gifrecolor-rules-*.json

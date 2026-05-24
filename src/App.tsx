@@ -85,7 +85,7 @@ export default function App() {
   const [gifColors,        setGifColors]        = useState<RgbColor[]>([]);
   const [colorEntries,     setColorEntries]     = useState<ColorEntry[]>([]);
   const [addPanelOpen,     setAddPanelOpen]     = useState(false);
-  const [pendingColor,     setPendingColor]     = useState("#ff0000");
+  const [pendingColors,    setPendingColors]    = useState<string[]>([]);
   const [eyedropperActive, setEyedropperActive] = useState(false);
   const [gifTolerance,     setGifTolerance]     = useState(settingsDefaultTol);
   const [modifiedGifData,  setModifiedGifData]  = useState<string | null>(null);
@@ -96,7 +96,9 @@ export default function App() {
   const [applyProgress,    setApplyProgress]    = useState<{ current: number; total: number; phase: "transform" | "encode" } | null>(null);
   const [previewLoading,   setPreviewLoading]   = useState(false);
   const [gifFrameCount,    setGifFrameCount]    = useState<number | null>(null);
+  const [gifMinDim,        setGifMinDim]        = useState<number | null>(null);
   const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
+  const [sliderFrameIndex,  setSliderFrameIndex]  = useState(0);
   const [previewModeActive, setPreviewModeActive] = useState(false);
   const [previewTrigger,   setPreviewTrigger]   = useState(0);
   const liveEntriesRef = useRef<ColorEntry[] | null>(null);
@@ -176,25 +178,35 @@ export default function App() {
       setModifiedGifData(null);
       setPreviewData(null);
       setGifFrameCount(null);
+      setGifMinDim(null);
       setPreviewFrameIndex(0);
       setPreviewModeActive(false);
       setColorEntries([]);
       setAddPanelOpen(false);
       setEyedropperActive(false);
-      const [colors, frameCount] = await Promise.all([
+      const [colors, info] = await Promise.all([
         invoke<RgbColor[]>("extract_gif_colors", { filePath: selected, tolerance: gifTolerance }),
-        invoke<number>("get_gif_frame_count", { filePath: selected }),
+        invoke<{ width: number; height: number; frameCount: number }>("get_gif_info", { filePath: selected }),
       ]);
       setGifColors(colors);
-      setGifFrameCount(frameCount);
+      setGifFrameCount(info.frameCount);
+      setGifMinDim(Math.min(info.width, info.height));
     } catch (err) {
       notifications.show({ title: t("err_open"), message: String(err), color: "red" });
     } finally { setGifLoading(false); }
   }
 
+  function togglePendingColor(hex: string) {
+    setPendingColors(prev =>
+      prev.includes(hex) ? prev.filter(h => h !== hex) : [...prev, hex]
+    );
+  }
+
   // ── Color entries ───────────────────────────────────────────────────────────
-  function handleConfirmAdd(replHex: string, transparent: boolean, tolerance: number) {
-    setColorEntries(prev => [...prev, { id: newId(), sourceHex: pendingColor, replHex, transparent, tolerance }]);
+  function handleConfirmAdd(replHex: string, transparent: boolean, tolerance: number, border: number) {
+    if (pendingColors.length === 0) return;
+    setColorEntries(prev => [...prev, { id: newId(), sourceHexes: pendingColors, replHex, transparent, tolerance, border }]);
+    setPendingColors([]);
     setAddPanelOpen(false);
     setEyedropperActive(false);
   }
@@ -212,11 +224,13 @@ export default function App() {
     }
     let cancelled = false;
     setPreviewLoading(true);
-    const mappings = entries.map(e => {
-      const src  = hexToRgb(e.sourceHex);
-      const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
-      return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance };
-    });
+    const mappings = entries.flatMap(e =>
+      e.sourceHexes.map(hex => {
+        const src  = hexToRgb(hex);
+        const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
+        return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance, borderPct: e.border * 0.1 };
+      })
+    );
     invoke<string>("apply_frame", { filePath: originalGifPath, frameIndex: previewFrameIndex, mappings })
       .then(r  => { if (!cancelled) setPreviewData(r); })
       .catch(() => {})
@@ -236,11 +250,13 @@ export default function App() {
     setApplyLoading(true);
     setApplyProgress(null);
     try {
-      const mappings = colorEntries.map(e => {
-        const src  = hexToRgb(e.sourceHex);
-        const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
-        return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance };
-      });
+      const mappings = colorEntries.flatMap(e =>
+        e.sourceHexes.map(hex => {
+          const src  = hexToRgb(hex);
+          const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
+          return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance, borderPct: e.border * 0.1 };
+        })
+      );
       const channel = new Channel<ProgressEvent>();
       channel.onmessage = (event: ProgressEvent) => {
         if (event.type === "transform") {
@@ -288,9 +304,10 @@ export default function App() {
         version: 1,
         createdAt: new Date().toISOString(),
         rules: colorEntries.map(e => ({
-          from: e.sourceHex.toUpperCase(),
+          from: e.sourceHexes.map(h => h.toUpperCase()),
           to: e.transparent ? null : e.replHex.toUpperCase(),
           tolerance: e.tolerance,
+          border: e.border,
           transparent: e.transparent,
         })),
       };
@@ -315,11 +332,12 @@ export default function App() {
       if (parsed.format !== "gifrecolor.rules" || !Array.isArray(parsed.rules)) {
         throw new Error("invalid format");
       }
-      const imported: ColorEntry[] = parsed.rules.map((r: { from: string; to: string | null; tolerance: number; transparent: boolean }) => ({
+      const imported: ColorEntry[] = parsed.rules.map((r: { from: string | string[]; to: string | null; tolerance: number; border?: number; transparent: boolean }) => ({
         id: newId(),
-        sourceHex: r.from.toLowerCase(),
+        sourceHexes: (Array.isArray(r.from) ? r.from : [r.from]).map(h => h.toLowerCase()),
         replHex: r.to ? r.to.toLowerCase() : "#000000",
         tolerance: r.tolerance ?? 0,
+        border: r.border ?? 3,
         transparent: !!r.transparent,
       }));
       if (colorEntries.length > 0) {
@@ -346,7 +364,7 @@ export default function App() {
     ? t("no_file")
     : `${colorEntries.length} ${t(colorEntries.length === 1 ? "color_singular" : "color_plural")} ${t("assigned")}${modifiedGifData ? "" : " · " + t("unsaved")}`;
 
-  const frameLabel = hasFrames ? `Frame ${previewFrameIndex + 1} / ${gifFrameCount}` : "–";
+  const frameLabel = hasFrames ? `Frame ${sliderFrameIndex + 1} / ${gifFrameCount}` : "–";
 
   const applySubLabel = hasGif && colorEntries.length > 0
     ? `${colorEntries.length} ${t(colorEntries.length === 1 ? "rule_singular" : "rule_plural")} ${t("on_all_frames", { n: gifFrameCount ?? "?" })}`
@@ -466,7 +484,7 @@ export default function App() {
                       src={originalGifData}
                       label={t("preview_open")}
                       eyedropperActive={eyedropperActive}
-                      onColorPicked={hex => { setPendingColor(hex); setEyedropperActive(false); }}
+                      onColorPicked={hex => { togglePendingColor(hex); }}
                     />
                   </div>
                 </div>
@@ -501,15 +519,15 @@ export default function App() {
                 <div className="controls-divider" />
                 <div className="frame-control">
                   <RangeSlider
-                    value={previewFrameIndex}
+                    value={sliderFrameIndex}
                     min={0}
                     max={hasFrames ? (gifFrameCount! - 1) : 0}
                     disabled={!hasFrames}
-                    onChange={setPreviewFrameIndex}
-                    onChangeEnd={setPreviewFrameIndex}
+                    onChange={setSliderFrameIndex}
+                    onChangeEnd={v => { setSliderFrameIndex(v); setPreviewFrameIndex(v); }}
                   />
                   <span className="frame-count">
-                    {hasFrames ? `${previewFrameIndex + 1} / ${gifFrameCount}` : "– / –"}
+                    {hasFrames ? `${sliderFrameIndex + 1} / ${gifFrameCount}` : "– / –"}
                   </span>
                 </div>
               </div>
@@ -526,12 +544,14 @@ export default function App() {
                   onUpdate={handleUpdateEntry}
                   addPanelOpen={addPanelOpen}
                   onToggleAddPanel={() => { setAddPanelOpen(v => !v); setEyedropperActive(false); }}
-                  pendingColor={pendingColor}
-                  onPendingColorChange={setPendingColor}
+                  pendingColors={pendingColors}
+                  onTogglePendingColor={togglePendingColor}
+                  onSetPendingColors={setPendingColors}
                   onConfirmAdd={handleConfirmAdd}
                   eyedropperActive={eyedropperActive}
                   onToggleEyedropper={() => setEyedropperActive(v => !v)}
                   gifLoaded={hasGif}
+                  gifMinDim={gifMinDim}
                   onPreviewUpdate={handlePreviewUpdate}
                   onImport={handleImportRules}
                   onExport={handleExportRules}

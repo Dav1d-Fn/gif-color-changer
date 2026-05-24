@@ -936,3 +936,296 @@ html, body {
 /* About card */
 .about-card { font-size: 12px; color: var(--text-faint); line-height: 1.65; }
 .about-card strong { color: var(--text); font-weight: 600; }
+
+/* ── Source Color Step 1 (Chip Tray) ─────────────────────────────────────── */
+.sc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 0 0;
+}
+
+.sc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.sc-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+.sc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Micro-labels */
+.micro-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+.micro-hint {
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+.count-pill {
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Detected color palette */
+.pal-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pal-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+}
+.pal-swatch:hover { transform: scale(1.05); }
+.pal-swatch.selected {
+  box-shadow: 0 0 0 2px var(--bg-window), 0 0 0 4px var(--accent);
+}
+.pal-swatch.selected::after {
+  content: '';
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-window);
+}
+
+/* Chip tray */
+.chip-tray {
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip-tray.has-items {
+  border-style: solid;
+}
+.tray-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Chips */
+@keyframes chipIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes chipFlash {
+  0%, 100% { border-color: var(--border); }
+  50%      { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  animation: chipIn 0.14s ease-out;
+}
+.chip--flash {
+  animation: chipFlash 0.6s ease-out;
+}
+.chip-sw {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.chip-hex {
+  padding-right: 4px;
+}
+.chip-x {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.chip-x:hover {
+  color: var(--danger);
+  background: rgba(224,122,107,0.12);
+}
+
+/* Hex input row */
+.sc-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.hex-row {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.hex-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.hex-row.has-error {
+  border-color: var(--danger);
+}
+.hex-row-preview {
+  width: 38px;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+.hex-row-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 10px 14px;
+}
+.hex-row-input::placeholder { color: var(--text-faint); }
+.hex-row-add {
+  background: var(--bg-elevated);
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.hex-row-add:hover { background: #2a2f37; }
+.add-plus {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Pick from GIF button (step 1) */
+.pick-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pick-btn:hover:not(:disabled) { border-color: var(--border-strong); }
+.pick-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.pick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Step 1 footer */
+.sc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+.sc-btn-cancel {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+.sc-btn-cancel:hover { color: var(--text); }
+.sc-btn-next {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 14px -2px var(--accent-glow);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sc-btn-next:hover:not(.disabled) { background: var(--accent-hover); }
+.sc-btn-next.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}

@@ -25,6 +25,83 @@ pub struct ColorMapping {
     pub repl_b: u8,
     pub transparent: bool,
     pub tolerance: u32,
+    pub border_pct: f32,
+}
+
+fn replace_pixel(pixel: &mut [u8], m: &ColorMapping) {
+    if m.transparent {
+        pixel[3] = 0;
+    } else {
+        pixel[0] = m.repl_r;
+        pixel[1] = m.repl_g;
+        pixel[2] = m.repl_b;
+    }
+}
+
+// Applies all mappings to a frame. Pass 1 matches within tolerance; if any mapping
+// has border_pct > 0, pass 2 expands each replaced region by its own border radius.
+fn transform_frame(rgba: &mut Vec<u8>, width: usize, height: usize, mappings: &[ColorMapping]) {
+    let n = width * height;
+    let base = width.min(height) as f32;
+
+    // Transparenz-Regeln zuerst anwenden, dann Farb-Ersetzungen.
+    let mut order: Vec<usize> = (0..mappings.len()).collect();
+    order.sort_by_key(|&i| if mappings[i].transparent { 0usize } else { 1 });
+
+    // Precompute per-mapping border radius in pixels.
+    let border_px: Vec<i32> = mappings.iter()
+        .map(|m| (m.border_pct / 100.0 * base).round() as i32)
+        .collect();
+    let max_border = *border_px.iter().max().unwrap_or(&0);
+
+    // Pass 1 – standard tolerance matching (transparent rules first).
+    let mut applied: Vec<i32> = vec![-1; n];
+    for (i, pixel) in rgba.chunks_mut(4).enumerate() {
+        if pixel[3] == 0 { continue; }
+        let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
+        for &mi in &order {
+            let m = &mappings[mi];
+            if dist_sq(r, g, b, m.target_r, m.target_g, m.target_b) <= m.tolerance * m.tolerance {
+                replace_pixel(pixel, m);
+                applied[i] = mi as i32;
+                break;
+            }
+        }
+    }
+
+    if max_border == 0 { return; }
+
+    // Pass 2 – expand each replaced region by its mapping's border radius.
+    // For each unmatched opaque pixel, find the nearest matched neighbour whose
+    // mapping's border radius reaches it, then apply that mapping.
+    for y in 0..height {
+        for x in 0..width {
+            let i = y * width + x;
+            if applied[i] >= 0 || rgba[i * 4 + 3] == 0 { continue; }
+
+            let mut best_mi: i32 = -1;
+            let mut best_d = i32::MAX;
+            for dy in -max_border..=max_border {
+                for dx in -max_border..=max_border {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 { continue; }
+                    let ni = ny as usize * width + nx as usize;
+                    let mi = applied[ni];
+                    if mi < 0 { continue; }
+                    let d = dx * dx + dy * dy;
+                    if d <= border_px[mi as usize] * border_px[mi as usize] && d < best_d {
+                        best_d = d;
+                        best_mi = mi;
+                    }
+                }
+            }
+
+            if best_mi >= 0 {
+                replace_pixel(&mut rgba[i * 4..(i + 1) * 4], &mappings[best_mi as usize]);
+            }
+        }
+    }
 }
 
 fn dist_sq(r1: u8, g1: u8, b1: u8, r2: u8, g2: u8, b2: u8) -> u32 {
@@ -239,29 +316,17 @@ async fn apply_color_changes(
     tauri::async_runtime::spawn_blocking(move || {
         let t = std::time::Instant::now();
 
-        // Pass 1: sequentielles Dekodieren (GIF-Decoder nicht thread-safe)
         let _ = on_progress.send(ProgressEvent::Decode);
         let mut decoded = decode_to_rgba_frames(&file_path)?;
         let total = decoded.frames.len();
+        let width  = decoded.width as usize;
+        let height = decoded.height as usize;
         eprintln!("[bench] decode: {}ms  ({} frames)", t.elapsed().as_millis(), total);
 
-        // Pass 2: parallele Farb-Transformation (jeder Frame unabhängig)
         let t2 = std::time::Instant::now();
         let counter = Arc::new(AtomicUsize::new(0));
         decoded.frames.par_iter_mut().for_each(|(rgba, _)| {
-            for pixel in rgba.chunks_mut(4) {
-                if pixel[3] == 0 { continue; }
-                let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
-                for m in &mappings {
-                    if dist_sq(r, g, b, m.target_r, m.target_g, m.target_b)
-                        <= m.tolerance * m.tolerance
-                    {
-                        if m.transparent { pixel[3] = 0; }
-                        else { pixel[0] = m.repl_r; pixel[1] = m.repl_g; pixel[2] = m.repl_b; }
-                        break;
-                    }
-                }
-            }
+            transform_frame(rgba, width, height, &mappings);
             let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
             let _ = on_progress.send(ProgressEvent::Transform { frame: done, total });
         });
@@ -314,36 +379,17 @@ async fn apply_frame(
     tauri::async_runtime::spawn_blocking(move || {
         let t = std::time::Instant::now();
         let decoded = decode_to_rgba_frames(&file_path)?;
+        let width  = decoded.width as usize;
+        let height = decoded.height as usize;
 
         let (rgba, delay) = decoded.frames
             .get(frame_index)
             .ok_or_else(|| format!("Frame {} out of range (total: {})", frame_index, decoded.frames.len()))?;
 
         let mut rgba = rgba.clone();
-        for pixel in rgba.chunks_mut(4) {
-            if pixel[3] == 0 {
-                continue;
-            }
-            let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
-            for m in &mappings {
-                if dist_sq(r, g, b, m.target_r, m.target_g, m.target_b) <= m.tolerance * m.tolerance {
-                    if m.transparent {
-                        pixel[3] = 0;
-                    } else {
-                        pixel[0] = m.repl_r;
-                        pixel[1] = m.repl_g;
-                        pixel[2] = m.repl_b;
-                    }
-                    break;
-                }
-            }
-        }
+        transform_frame(&mut rgba, width, height, &mappings);
 
-        let single = DecodedGif {
-            width: decoded.width,
-            height: decoded.height,
-            frames: vec![(rgba, *delay)],
-        };
+        let single = DecodedGif { width: decoded.width, height: decoded.height, frames: vec![(rgba, *delay)] };
         let result = encode_rgba_frames_to_gif(&single);
         eprintln!("[bench] apply_frame({}) total: {}ms", frame_index, t.elapsed().as_millis());
         result

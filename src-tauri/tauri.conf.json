@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "GIF Color Changer",
-        "width": 1200,
-        "height": 830,
-        "minWidth": 1200,
-        "minHeight": 820,
+        "width": 1400,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
         "resizable": true,
         "decorations": false
       }

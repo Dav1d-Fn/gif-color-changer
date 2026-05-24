@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import { readFile, writeFile, mkdir } from "@tauri-apps/plugin-fs";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { notifications } from "@mantine/notifications";
@@ -119,6 +120,26 @@ export function BatchTab({
   const filesRef = useRef(files);
   filesRef.current = files;
 
+  // Tauri native drag-drop (HTML5 DataTransfer doesn't expose paths in webview)
+  useEffect(() => {
+    const unlisten = listen<{ paths: string[]; position: { x: number; y: number } }>(
+      "tauri://drag-drop",
+      e => {
+        const gifPaths = (e.payload.paths ?? []).filter(p => p.toLowerCase().endsWith(".gif"));
+        if (gifPaths.length > 0) addFilePaths(gifPaths);
+        setIsDragOver(false);
+      }
+    );
+    const unlistenOver = listen("tauri://drag-over", () => setIsDragOver(true));
+    const unlistenLeave = listen("tauri://drag-leave", () => setIsDragOver(false));
+    return () => {
+      unlisten.then(f => f());
+      unlistenOver.then(f => f());
+      unlistenLeave.then(f => f());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const totalFrames = files.reduce((s, f) => s + (f.info?.frameCount ?? 0), 0);
   const estSec = Math.ceil(totalFrames * 0.05);
   const exampleName = files[0] ? resolveSchema(fileSchema, files[0].name, 0) : `example_recolored.gif`;
@@ -166,23 +187,6 @@ export function BatchTab({
     await addFilePaths(paths as string[]);
   }
 
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragOver(true);
-  }
-  function handleDragLeave() { setIsDragOver(false); }
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragOver(false);
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    const gifPaths = droppedFiles
-      .filter(f => f.name.toLowerCase().endsWith(".gif"))
-      // @ts-expect-error Tauri extends File with .path
-      .map(f => f.path as string)
-      .filter(Boolean);
-    if (gifPaths.length > 0) addFilePaths(gifPaths);
-  }
-
   async function handleBrowseFolder() {
     const dir = await open({ directory: true });
     if (dir) setExportFolder(dir as string);
@@ -199,15 +203,18 @@ export function BatchTab({
     setBatchDone(false);
     setDoneCount(0);
 
-    const mappings = colorEntries.map(e => {
-      const src  = hexToRgb(e.sourceHex);
-      const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
-      return {
-        targetR: src.r, targetG: src.g, targetB: src.b,
-        replR: repl.r, replG: repl.g, replB: repl.b,
-        transparent: e.transparent, tolerance: e.tolerance,
-      };
-    });
+    const mappings = colorEntries.flatMap(e =>
+      e.sourceHexes.map(hex => {
+        const src  = hexToRgb(hex);
+        const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
+        return {
+          targetR: src.r, targetG: src.g, targetB: src.b,
+          replR: repl.r, replG: repl.g, replB: repl.b,
+          transparent: e.transparent, tolerance: e.tolerance,
+          borderPct: e.border * 0.1,
+        };
+      })
+    );
 
     try {
       await mkdir(exportFolder, { recursive: true });
@@ -273,9 +280,6 @@ export function BatchTab({
         <div
           className="colors-card"
           style={{ borderColor: isDragOver ? "var(--accent)" : undefined }}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
         >
           <div className="card-head">
             <span className="card-title">
@@ -363,12 +367,12 @@ export function BatchTab({
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {colorEntries.map(e => (
                   <div key={e.id} className="rule-mini">
-                    {e.transparent ? (
-                      <div className="rule-mini-swatch transparent" />
-                    ) : (
-                      <div className="rule-mini-swatch" style={{ backgroundColor: e.sourceHex }} />
-                    )}
-                    <span className="hex-label" style={{ fontSize: 11.5 }}>{e.sourceHex.toUpperCase()}</span>
+                    {e.sourceHexes.map(hex => (
+                      <div key={hex} className="rule-mini-swatch" style={{ backgroundColor: hex }} />
+                    ))}
+                    <span className="hex-label" style={{ fontSize: 11.5 }}>
+                      {e.sourceHexes.length === 1 ? e.sourceHexes[0].toUpperCase() : `${e.sourceHexes.length} Farben`}
+                    </span>
                     <span className="arrow">→</span>
                     {e.transparent ? (
                       <div className="rule-mini-swatch transparent" />
