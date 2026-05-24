@@ -1,12 +1,12 @@
 # 🎨 GIF Color Changer
 
-> Ein leichtgewichtiger Desktop-App zum Ersetzen von Farben in animierten GIFs — präzise, schnell und ohne Qualitätsverlust.
+> A lightweight desktop app for replacing colors in animated GIFs — precise, fast, and lossless.
 
 <br>
 
 ## 🎬 Demo
 
-<!-- Demo-Video hier einfügen -->
+<!-- Insert demo video here -->
 
 <br>
 
@@ -14,60 +14,60 @@
 
 ## ✨ Features
 
-- 🖼️ **Live-Vorschau** — sieh Änderungen frame-by-frame bevor du exportierst
-- 🎯 **Toleranz-basiertes Matching** — ähnliche Farbtöne werden automatisch miterfasst
-- 🔲 **Transparenz-Support** — ersetze Farben durch vollständige Transparenz
-- 🪄 **Kanten-Expansion** — border-Effekt füllt Pixel rund um ersetzte Bereiche auf
-- 📦 **Batch-Verarbeitung** — mehrere GIFs gleichzeitig mit gleichen Regeln bearbeiten
-- 💾 **Regeln exportieren/importieren** — Farbregeln als `.json` speichern und wiederverwenden
-- 🌍 **Mehrsprachig** — Deutsch, Englisch, Französisch, Spanisch
-- 🖱️ **Eyedropper** — Farben direkt per Klick aus dem GIF aufnehmen
-- 🗂️ **Drag & Drop** — GIFs einfach in die App ziehen
+- 🖼️ **Live Preview** — see changes frame-by-frame before exporting
+- 🎯 **Tolerance-based matching** — similar shades are automatically included
+- 🔲 **Transparency support** — replace any color with full transparency
+- 🪄 **Border expansion** — fills pixels around replaced regions for clean edges
+- 📦 **Batch processing** — apply the same rules to multiple GIFs at once
+- 💾 **Export / import rules** — save and reuse color rules as `.json` files
+- 🌍 **Multilingual** — English, German, French, Spanish
+- 🖱️ **Eyedropper** — pick colors directly by clicking on the GIF
+- 🗂️ **Drag & Drop** — just drop GIFs into the app
 
 ---
 
-## 🖥️ Oberfläche
+## 🖥️ Interface
 
-Die App hat drei Bereiche, erreichbar über die Seitenleiste:
+The app has three sections, accessible via the sidebar:
 
-| Tab | Funktion |
-|-----|----------|
-| 🏠 **Home** | GIF öffnen, Farbregeln definieren, Änderungen anwenden & speichern |
-| 📦 **Batch** | Mehrere GIFs mit denselben Regeln auf einmal verarbeiten |
-| ⚙️ **Settings** | Sprache, Standard-Toleranz, Export-Ordner, Datei-Schema |
+| Tab | Purpose |
+|-----|---------|
+| 🏠 **Home** | Open a GIF, define color rules, apply changes & save |
+| 📦 **Batch** | Process multiple GIFs with the same ruleset at once |
+| ⚙️ **Settings** | Language, default tolerance, export folder, filename schema |
 
 ---
 
-## ⚙️ Wie es funktioniert
+## ⚙️ How it works
 
-GIF-Verarbeitung läuft vollständig in Rust:
+All GIF processing runs entirely in Rust:
 
-1. **Decode** — alle Frames werden zu vollen RGBA-Canvases aufgelöst (inkl. Disposal-Methoden)
-2. **Transform** — Pixel-genaues Farb-Matching mit quadratischer Euklidischer Distanz (`dr² + dg² + db²`)
-3. **Quantize** — NeuQuant-Algorithmus reduziert auf max. 256 Farben pro Frame (Rayon-parallelisiert)
-4. **Encode** — Re-Encoding als GIF mit korrekten Delays und Loop-Flag
+1. **Decode** — every frame is composited into a full RGBA canvas (respecting disposal methods)
+2. **Transform** — pixel-accurate color matching using squared Euclidean distance (`dr² + dg² + db²`)
+3. **Quantize** — NeuQuant reduces each frame to max. 256 colors (Rayon-parallelized)
+4. **Encode** — re-encoded as GIF with correct delays and loop flag
 
-### Toleranz-Slider
+### Tolerance slider
 
-Der Slider läuft von **0–100**, der tatsächliche Schwellwert ist `toleranz²`. Das heißt: kleine Slider-Werte = enge Auswahl, große Werte = weiter Bereich ähnlicher Farbtöne.
+The slider runs from **0–100**, but the actual threshold is `tolerance²`. Low values = tight selection, high values = wide range of similar shades.
 
 ---
 
 ## 🚀 Build & Development
 
-**Voraussetzungen:** Node.js, Rust, Tauri CLI v2
+**Prerequisites:** Node.js, Rust, Tauri CLI v2
 
 ```bash
-# Dev-Modus (Vite + Tauri gleichzeitig)
+# Dev mode (Vite + Tauri together)
 npm run tauri dev
 
-# Release-Binary bauen
+# Build release binary
 npm run tauri build
 
-# Nur Frontend type-checken
+# Type-check frontend only
 npx tsc --noEmit
 
-# Rust prüfen ohne Build
+# Check Rust without building
 cd src-tauri && cargo check
 ```
 
@@ -75,30 +75,30 @@ cd src-tauri && cargo check
 
 ## 🛠️ Tech Stack
 
-| Bereich | Technologie |
-|---------|-------------|
+| Layer | Technology |
+|-------|------------|
 | UI | React 18 + TypeScript + Vite |
-| Komponenten | Mantine v7 |
-| Desktop-Shell | Tauri v2 |
-| GIF-Verarbeitung | Rust (`gif`, `color_quant`, `rayon`) |
-| Serialisierung | `serde` / `serde_json` |
+| Components | Mantine v7 |
+| Desktop shell | Tauri v2 |
+| GIF processing | Rust (`gif`, `color_quant`, `rayon`) |
+| Serialization | `serde` / `serde_json` |
 
 ---
 
-## 📁 Datei-Schema (Batch)
+## 📁 Filename Schema (Batch)
 
-Beim Batch-Export lässt sich der Dateiname per Schema konfigurieren:
+The output filename for batch exports can be customized using tokens:
 
-| Token | Bedeutung |
-|-------|-----------|
-| `{name}` | Originaldateiname ohne `.gif` |
-| `{date}` | Datum im Format `YYYY-MM-DD` |
-| `{index}` | Position in der Warteschlange (1-basiert) |
+| Token | Meaning |
+|-------|---------|
+| `{name}` | Original filename without `.gif` |
+| `{date}` | Date in `YYYY-MM-DD` format |
+| `{index}` | Position in the queue (1-based) |
 
-Beispiel: `{name}_recolored_{date}.gif` → `animation_recolored_2026-05-25.gif`
+Example: `{name}_recolored_{date}.gif` → `animation_recolored_2026-05-25.gif`
 
 ---
 
-## 📄 Lizenz
+## 📄 License
 
 MIT
