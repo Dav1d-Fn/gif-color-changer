@@ -6,7 +6,7 @@
 
 ## 🎬 Demo
 
-<!-- Insert demo video here -->
+[demo_gif_recolor.webm](https://github.com/user-attachments/assets/c8124ab1-d9d4-4231-9568-8a0d832ce041)
 
 <br>
 
