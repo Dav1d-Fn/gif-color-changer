@@ -211,7 +211,7 @@ export function BatchTab({
           targetR: src.r, targetG: src.g, targetB: src.b,
           replR: repl.r, replG: repl.g, replB: repl.b,
           transparent: e.transparent, tolerance: e.tolerance,
-          borderPct: e.border * 0.1,
+          borderPct: e.border * 0.1, unmatte: e.unmatte,
         };
       })
     );

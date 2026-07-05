@@ -203,9 +203,9 @@ export default function App() {
   }
 
   // ── Color entries ───────────────────────────────────────────────────────────
-  function handleConfirmAdd(replHex: string, transparent: boolean, tolerance: number, border: number) {
+  function handleConfirmAdd(replHex: string, transparent: boolean, tolerance: number, border: number, unmatte: boolean) {
     if (pendingColors.length === 0) return;
-    setColorEntries(prev => [...prev, { id: newId(), sourceHexes: pendingColors, replHex, transparent, tolerance, border }]);
+    setColorEntries(prev => [...prev, { id: newId(), sourceHexes: pendingColors, replHex, transparent, tolerance, border, unmatte }]);
     setPendingColors([]);
     setAddPanelOpen(false);
     setEyedropperActive(false);
@@ -228,7 +228,7 @@ export default function App() {
       e.sourceHexes.map(hex => {
         const src  = hexToRgb(hex);
         const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
-        return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance, borderPct: e.border * 0.1 };
+        return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance, borderPct: e.border * 0.1, unmatte: e.unmatte };
       })
     );
     invoke<string>("apply_frame", { filePath: originalGifPath, frameIndex: previewFrameIndex, mappings })
@@ -254,7 +254,7 @@ export default function App() {
         e.sourceHexes.map(hex => {
           const src  = hexToRgb(hex);
           const repl = e.transparent ? { r: 0, g: 0, b: 0 } : hexToRgb(e.replHex);
-          return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance, borderPct: e.border * 0.1 };
+          return { targetR: src.r, targetG: src.g, targetB: src.b, replR: repl.r, replG: repl.g, replB: repl.b, transparent: e.transparent, tolerance: e.tolerance, borderPct: e.border * 0.1, unmatte: e.unmatte };
         })
       );
       const channel = new Channel<ProgressEvent>();
@@ -309,6 +309,7 @@ export default function App() {
           tolerance: e.tolerance,
           border: e.border,
           transparent: e.transparent,
+          unmatte: e.unmatte,
         })),
       };
       await writeFile(savePath, new TextEncoder().encode(JSON.stringify(payload, null, 2)));
@@ -332,13 +333,14 @@ export default function App() {
       if (parsed.format !== "gifrecolor.rules" || !Array.isArray(parsed.rules)) {
         throw new Error("invalid format");
       }
-      const imported: ColorEntry[] = parsed.rules.map((r: { from: string | string[]; to: string | null; tolerance: number; border?: number; transparent: boolean }) => ({
+      const imported: ColorEntry[] = parsed.rules.map((r: { from: string | string[]; to: string | null; tolerance: number; border?: number; transparent: boolean; unmatte?: boolean }) => ({
         id: newId(),
         sourceHexes: (Array.isArray(r.from) ? r.from : [r.from]).map(h => h.toLowerCase()),
         replHex: r.to ? r.to.toLowerCase() : "#000000",
         tolerance: r.tolerance ?? 0,
         border: r.border ?? 3,
         transparent: !!r.transparent,
+        unmatte: !!r.unmatte,
       }));
       if (colorEntries.length > 0) {
         setPendingImport(imported);

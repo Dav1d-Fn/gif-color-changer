@@ -26,6 +26,26 @@ pub struct ColorMapping {
     pub transparent: bool,
     pub tolerance: u32,
     pub border_pct: f32,
+    pub unmatte: bool,
+}
+
+fn estimate_alpha(r: u8, g: u8, b: u8, mr: u8, mg: u8, mb: u8) -> f32 {
+    let mut max_a: f32 = 0.0;
+    for (p, m) in [(r as f32, mr as f32), (g as f32, mg as f32), (b as f32, mb as f32)] {
+        let far = if m >= 128.0 { 0.0 } else { 255.0 };
+        let range = (m - far).abs();
+        if range > 1.0 {
+            let a = (m - p).abs() / range;
+            if a > max_a { max_a = a; }
+        }
+    }
+    max_a.clamp(0.0, 1.0)
+}
+
+fn unmatte_channel(p: u8, m: u8, alpha: f32) -> u8 {
+    ((p as f32 - (1.0 - alpha) * m as f32) / alpha)
+        .clamp(0.0, 255.0)
+        .round() as u8
 }
 
 fn replace_pixel(pixel: &mut [u8], m: &ColorMapping) {
@@ -38,14 +58,40 @@ fn replace_pixel(pixel: &mut [u8], m: &ColorMapping) {
     }
 }
 
-// Applies all mappings to a frame. Pass 1 matches within tolerance; if any mapping
-// has border_pct > 0, pass 2 expands each replaced region by its own border radius.
+// Applies all mappings to a frame.
+// Pre-pass:  unmatte rules recover pixel colors from the baked-in background matte and mark
+//            pure-background pixels for later removal.
+// Main pass: regular transparent + color rules run on the (possibly recovered) colors.
+// Post-pass: background-marked pixels that no rule matched are made transparent.
+// If any mapping has border_pct > 0, a final border-expansion pass runs after all of the above.
 fn transform_frame(rgba: &mut Vec<u8>, width: usize, height: usize, mappings: &[ColorMapping]) {
     let n = width * height;
     let base = width.min(height) as f32;
 
-    // Transparenz-Regeln zuerst anwenden, dann Farb-Ersetzungen.
-    let mut order: Vec<usize> = (0..mappings.len()).collect();
+    // Pre-pass – unmatte: recover colors blended with the matte; mark pure-background pixels.
+    let mut is_background = vec![false; n];
+    for m in mappings.iter().filter(|m| m.transparent && m.unmatte) {
+        let threshold = m.tolerance as f32 / 100.0;
+        for (i, pixel) in rgba.chunks_mut(4).enumerate() {
+            if pixel[3] == 0 { continue; }
+            let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
+            let alpha = estimate_alpha(r, g, b, m.target_r, m.target_g, m.target_b);
+            if alpha < threshold {
+                is_background[i] = true;
+            } else if alpha < 0.99 {
+                pixel[0] = unmatte_channel(r, m.target_r, alpha);
+                pixel[1] = unmatte_channel(g, m.target_g, alpha);
+                pixel[2] = unmatte_channel(b, m.target_b, alpha);
+            }
+            // alpha ≈ 1.0: pure color, untouched
+        }
+    }
+
+    // Build rule order for main pass (unmatte rules excluded — already handled above).
+    // Remaining transparent rules first, then color-replacement rules.
+    let mut order: Vec<usize> = (0..mappings.len())
+        .filter(|&i| !(mappings[i].transparent && mappings[i].unmatte))
+        .collect();
     order.sort_by_key(|&i| if mappings[i].transparent { 0usize } else { 1 });
 
     // Precompute per-mapping border radius in pixels.
@@ -54,18 +100,53 @@ fn transform_frame(rgba: &mut Vec<u8>, width: usize, height: usize, mappings: &[
         .collect();
     let max_border = *border_px.iter().max().unwrap_or(&0);
 
-    // Pass 1 – standard tolerance matching (transparent rules first).
+    // Precompute target variants per rule: original target + unmatte-recovered versions.
+    // A color target picked from the original (matte-blended) image gets a computed
+    // "clean" variant by running the same unmatte math on the target color itself.
+    // The main pass checks all variants so both pure and recovered pixels match.
+    let unmatte_rules: Vec<&ColorMapping> = mappings.iter()
+        .filter(|m| m.transparent && m.unmatte)
+        .collect();
+    let target_variants: Vec<Vec<(u8, u8, u8)>> = order.iter().map(|&mi| {
+        let m = &mappings[mi];
+        let mut variants = vec![(m.target_r, m.target_g, m.target_b)];
+        for um in &unmatte_rules {
+            let threshold = um.tolerance as f32 / 100.0;
+            let alpha = estimate_alpha(m.target_r, m.target_g, m.target_b,
+                                       um.target_r, um.target_g, um.target_b);
+            if alpha >= threshold && alpha < 0.99 {
+                variants.push((
+                    unmatte_channel(m.target_r, um.target_r, alpha),
+                    unmatte_channel(m.target_g, um.target_g, alpha),
+                    unmatte_channel(m.target_b, um.target_b, alpha),
+                ));
+            }
+        }
+        variants
+    }).collect();
+
+    // Main pass – dist_sq matching on recovered colors, checking all target variants.
     let mut applied: Vec<i32> = vec![-1; n];
     for (i, pixel) in rgba.chunks_mut(4).enumerate() {
         if pixel[3] == 0 { continue; }
         let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
-        for &mi in &order {
+        for (oi, &mi) in order.iter().enumerate() {
             let m = &mappings[mi];
-            if dist_sq(r, g, b, m.target_r, m.target_g, m.target_b) <= m.tolerance * m.tolerance {
+            let matched = target_variants[oi].iter().any(|&(tr, tg, tb)| {
+                dist_sq(r, g, b, tr, tg, tb) <= m.tolerance * m.tolerance
+            });
+            if matched {
                 replace_pixel(pixel, m);
                 applied[i] = mi as i32;
                 break;
             }
+        }
+    }
+
+    // Post-pass – background pixels with no rule match become transparent.
+    for (i, pixel) in rgba.chunks_mut(4).enumerate() {
+        if is_background[i] && applied[i] == -1 && pixel[3] > 0 {
+            pixel[3] = 0;
         }
     }
 

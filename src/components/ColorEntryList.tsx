@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ColorPicker, Loader } from "@mantine/core";
 import { Toggle, RangeSlider, Swatch, TransparentSwatch } from "./ui";
 import { t } from "../i18n";
@@ -10,6 +10,7 @@ export interface ColorEntry {
   transparent: boolean;
   tolerance: number;
   border: number; // 0–50 → 0.0%–5.0% of min(width,height)
+  unmatte: boolean; // reverse-composite alpha from a known matte color
 }
 
 export interface RgbColor {
@@ -298,11 +299,12 @@ function EntryRow({
   const [localTransparent, setLocalTransparent] = useState(entry.transparent);
   const [localTol, setLocalTol] = useState(entry.tolerance);
   const [localBorder, setLocalBorder] = useState(entry.border);
+  const [localUnmatte, setLocalUnmatte] = useState(entry.unmatte);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const replHexRgb = localReplHexa.slice(0, 7);
 
-  function fireLive(overrides?: Partial<Pick<ColorEntry, "replHex"|"transparent"|"tolerance"|"border">>) {
+  function fireLive(overrides?: Partial<Pick<ColorEntry, "replHex"|"transparent"|"tolerance"|"border"|"unmatte">>) {
     onLiveState?.({
       id: entry.id,
       sourceHexes: pendingColors,
@@ -310,6 +312,7 @@ function EntryRow({
       transparent: overrides?.transparent ?? localTransparent,
       tolerance: overrides?.tolerance ?? localTol,
       border: overrides?.border ?? localBorder,
+      unmatte: overrides?.unmatte ?? localUnmatte,
     });
   }
 
@@ -326,6 +329,7 @@ function EntryRow({
     setLocalTransparent(entry.transparent);
     setLocalTol(entry.tolerance);
     setLocalBorder(entry.border);
+    setLocalUnmatte(entry.unmatte);
     onSetPendingColors(entry.sourceHexes);
     setStep(2);
     setEditing(true);
@@ -338,6 +342,7 @@ function EntryRow({
       transparent: localTransparent,
       tolerance: localTol,
       border: localBorder,
+      unmatte: localUnmatte,
     });
     onLiveState?.(null);
     setEditing(false);
@@ -345,7 +350,13 @@ function EntryRow({
 
   function handleTransparentChange(v: boolean) {
     setLocalTransparent(v);
-    fireLive({ transparent: v });
+    if (!v) { setLocalUnmatte(false); fireLive({ transparent: v, unmatte: false }); }
+    else fireLive({ transparent: v });
+  }
+
+  function handleUnmatteChange(v: boolean) {
+    setLocalUnmatte(v);
+    fireLive({ unmatte: v });
   }
 
   if (!editing) {
@@ -421,6 +432,16 @@ function EntryRow({
           <span className="option-hint">{t("transparent_hint")}</span>
         </div>
 
+        {localTransparent && (
+          <div className="option-row" style={{ paddingLeft: 12, borderLeft: "2px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Toggle checked={localUnmatte} onChange={handleUnmatteChange} />
+              <span className="option-label">{t("unmatte")}</span>
+            </div>
+            <span className="option-hint">{t("unmatte_hint")}</span>
+          </div>
+        )}
+
         {!localTransparent && (
           <div className="color-picker-section">
             <ColorPicker format="hexa" value={localReplHexa} onChange={updateReplHexa} fullWidth />
@@ -436,7 +457,7 @@ function EntryRow({
         <div className="option-row">
           <div>
             <span className="option-label">{t("tolerance")}</span>
-            <span className="option-hint"> — {t("tolerance_hint")}</span>
+            <span className="option-hint"> — {localUnmatte ? t("unmatte_tol_hint") : t("tolerance_hint")}</span>
           </div>
           <div className="slider-group">
             <RangeSlider
@@ -444,7 +465,7 @@ function EntryRow({
               onChange={setLocalTol}
               onChangeEnd={v => fireLive({ tolerance: v })}
             />
-            <span className="slider-num">{localTol}</span>
+            <span className="slider-num">{localUnmatte ? `${localTol}%` : localTol}</span>
           </div>
         </div>
 
@@ -490,9 +511,9 @@ interface AddPanelProps {
   eyedropperActive: boolean;
   onToggleEyedropper: () => void;
   gifLoaded: boolean;
-  onConfirm: (replHex: string, transparent: boolean, tolerance: number, border: number) => void;
+  onConfirm: (replHex: string, transparent: boolean, tolerance: number, border: number, unmatte: boolean) => void;
   onCancel: () => void;
-  onLivePreview?: (replHex: string, transparent: boolean, tolerance: number, border: number) => void;
+  onLivePreview?: (replHex: string, transparent: boolean, tolerance: number, border: number, unmatte: boolean) => void;
   gifMinDim: number | null;
 }
 
@@ -506,6 +527,7 @@ function AddPanel({
   const [replHexa, setReplHexa] = useState("#ff0000ff");
   const replHexaRef = useRef("#ff0000ff");
   const [transparent, setTransparent] = useState(false);
+  const [unmatte, setUnmatte] = useState(false);
   const [tol, setTol] = useState(20);
   const [border, setBorder] = useState(3);
   function borderLabel(b: number) {
@@ -517,14 +539,19 @@ function AddPanel({
   const [localGifTol, setLocalGifTol] = useState(gifTolerance);
   const liveDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cancel any pending debounced live-preview when the panel closes (confirm or cancel),
+  // so stale fireLive calls don't overwrite the preview after pendingColors is cleared.
+  useEffect(() => () => { if (liveDebounce.current) clearTimeout(liveDebounce.current); }, []);
+
   const replHexRgb = replHexa.slice(0, 7);
 
-  function fireLive(overrides?: { replHex?: string; transparent?: boolean; tolerance?: number; border?: number }) {
+  function fireLive(overrides?: { replHex?: string; transparent?: boolean; tolerance?: number; border?: number; unmatte?: boolean }) {
     const rh  = overrides?.replHex     ?? replHexaRef.current.slice(0, 7);
     const tr  = overrides?.transparent ?? transparent;
     const tl  = overrides?.tolerance   ?? tol;
     const bd  = overrides?.border      ?? border;
-    onLivePreview?.(rh, tr, tl, bd);
+    const um  = overrides?.unmatte     ?? unmatte;
+    onLivePreview?.(rh, tr, tl, bd, um);
   }
 
   function updateReplHexa(v: string) {
@@ -536,7 +563,13 @@ function AddPanel({
 
   function handleTransparentChange(v: boolean) {
     setTransparent(v);
-    fireLive({ transparent: v });
+    if (!v) { setUnmatte(false); fireLive({ transparent: v, unmatte: false }); }
+    else fireLive({ transparent: v });
+  }
+
+  function handleUnmatteChange(v: boolean) {
+    setUnmatte(v);
+    fireLive({ unmatte: v });
   }
 
   function handleTolChange(v: number) { setTol(v); }
@@ -557,7 +590,7 @@ function AddPanel({
           gifLoaded={gifLoaded}
           onCancel={onCancel}
           cancelLabel={t("cancel")}
-          onNext={() => setStep(2)}
+          onNext={() => { setStep(2); fireLive(); }}
         />
       </div>
     );
@@ -587,6 +620,16 @@ function AddPanel({
           <span className="option-hint">{t("transparent_hint")}</span>
         </div>
 
+        {transparent && (
+          <div className="option-row" style={{ paddingLeft: 12, borderLeft: "2px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Toggle checked={unmatte} onChange={handleUnmatteChange} />
+              <span className="option-label">{t("unmatte")}</span>
+            </div>
+            <span className="option-hint">{t("unmatte_hint")}</span>
+          </div>
+        )}
+
         {!transparent && (
           <div className="color-picker-section">
             <ColorPicker format="hexa" value={replHexa} onChange={updateReplHexa} fullWidth />
@@ -599,11 +642,11 @@ function AddPanel({
         <div className="option-row">
           <div>
             <span className="option-label">{t("tolerance")}</span>
-            <span className="option-hint"> — {t("tolerance_hint")}</span>
+            <span className="option-hint"> — {unmatte ? t("unmatte_tol_hint") : t("tolerance_hint")}</span>
           </div>
           <div className="slider-group">
             <RangeSlider value={tol} onChange={handleTolChange} onChangeEnd={v => fireLive({ tolerance: v })} />
-            <span className="slider-num">{tol}</span>
+            <span className="slider-num">{unmatte ? `${tol}%` : tol}</span>
           </div>
         </div>
 
@@ -623,7 +666,7 @@ function AddPanel({
         <button className="btn btn-ghost" onClick={() => setStep(1)}><BackIcon /> {t("back")}</button>
         <div className="edit-actions-right">
           <button className="btn btn-ghost" onClick={onCancel}>{t("cancel")}</button>
-          <button className="btn btn-accent" onClick={() => onConfirm(replHexaRef.current.slice(0, 7), transparent, tol, border)}>
+          <button className="btn btn-accent" onClick={() => onConfirm(replHexaRef.current.slice(0, 7), transparent, tol, border, unmatte)}>
             {t("add")}
           </button>
         </div>
@@ -646,7 +689,7 @@ interface ColorEntryListProps {
   pendingColors: string[];
   onTogglePendingColor: (hex: string) => void;
   onSetPendingColors: (hexes: string[]) => void;
-  onConfirmAdd: (replHex: string, transparent: boolean, tolerance: number, border: number) => void;
+  onConfirmAdd: (replHex: string, transparent: boolean, tolerance: number, border: number, unmatte: boolean) => void;
   eyedropperActive: boolean;
   onToggleEyedropper: () => void;
   gifLoaded: boolean;
@@ -672,13 +715,13 @@ export function ColorEntryList({
     }
   }
 
-  function handleAddLivePreview(replHex: string, transparent: boolean, tolerance: number, border: number) {
-    const virtualEntry: ColorEntry = { id: "__add__", sourceHexes: pendingColors, replHex, transparent, tolerance, border };
+  function handleAddLivePreview(replHex: string, transparent: boolean, tolerance: number, border: number, unmatte: boolean) {
+    const virtualEntry: ColorEntry = { id: "__add__", sourceHexes: pendingColors, replHex, transparent, tolerance, border, unmatte };
     onPreviewUpdate([...entries, virtualEntry]);
   }
 
-  function handleConfirm(replHex: string, transparent: boolean, tol: number, border: number) {
-    onConfirmAdd(replHex, transparent, tol, border);
+  function handleConfirm(replHex: string, transparent: boolean, tol: number, border: number, unmatte: boolean) {
+    onConfirmAdd(replHex, transparent, tol, border, unmatte);
     onPreviewUpdate(null);
   }
 
