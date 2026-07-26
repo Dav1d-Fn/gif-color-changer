@@ -1,18 +1,21 @@
 # 🎨 GIF Color Changer
 
-> A lightweight desktop app for replacing colors in animated GIFs — precise, fast, and lossless.
-
-<br>
-
-## 🎬 Demo
+<div align="center">
 
 [demo_gif_recolor.webm](https://github.com/user-attachments/assets/c8124ab1-d9d4-4231-9568-8a0d832ce041)
 
-<br>
+</div>
 
 ---
 
-## ✨ Features
+## Overview 📋
+
+**GIF Color Changer** is a lightweight desktop app for replacing colors in animated GIFs — precise, fast, and lossless.
+Built with [React](https://reactjs.org/) and [Tauri v2](https://v2.tauri.app/), all processing runs natively in Rust, so nothing ever leaves your machine.
+
+---
+
+## Features ✨
 
 - 🖼️ **Live Preview** — see changes frame-by-frame before exporting
 - 🎯 **Tolerance-based matching** — similar shades are automatically included
@@ -26,19 +29,17 @@
 
 ---
 
-## 🖥️ Interface
+## Interface 🖥️
 
 The app has three sections, accessible via the sidebar:
 
-| Tab | Purpose |
-|-----|---------|
-| 🏠 **Home** | Open a GIF, define color rules, apply changes & save |
-| 📦 **Batch** | Process multiple GIFs with the same ruleset at once |
-| ⚙️ **Settings** | Language, default tolerance, export folder, filename schema |
+- 🏠 **Home** — open a GIF, define color rules, apply changes & save
+- 📦 **Batch** — process multiple GIFs with the same ruleset at once
+- ⚙️ **Settings** — language, live-preview default, export folder, filename schema, overwrite behavior
 
 ---
 
-## ⚙️ How it works
+## How it works ⚙️
 
 All GIF processing runs entirely in Rust:
 
@@ -53,7 +54,23 @@ The slider runs from **0–100**, but the actual threshold is `tolerance²`. Low
 
 ---
 
-## 🚀 Build & Development
+## Installation 💻
+
+### Windows 🪟
+1. Download the latest `.exe`/`.msi` installer from the [Releases](https://github.com/Dav1d-Fn/gif-color-changer/releases) page.
+2. Run the installer and follow the on-screen instructions.
+
+### macOS 🍎
+1. Download the `.dmg` from the [Releases](https://github.com/Dav1d-Fn/gif-color-changer/releases) page (`aarch64` for Apple Silicon, `x86_64` for Intel).
+2. Open it and drag the app into your Applications folder.
+
+### Linux 🐧
+1. Download the `.AppImage` or `.deb` from the [Releases](https://github.com/Dav1d-Fn/gif-color-changer/releases) page.
+2. Make the AppImage executable (`chmod +x`) and run it, or install the `.deb` with your package manager.
+
+---
+
+## Build & Development 🚀
 
 **Prerequisites:** Node.js, Rust, Tauri CLI v2
 
@@ -73,32 +90,34 @@ cd src-tauri && cargo check
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack 🛠️
 
-| Layer | Technology |
-|-------|------------|
-| UI | React 18 + TypeScript + Vite |
-| Components | Mantine v7 |
-| Desktop shell | Tauri v2 |
-| GIF processing | Rust (`gif`, `color_quant`, `rayon`) |
-| Serialization | `serde` / `serde_json` |
+- **UI** — React 18 + TypeScript + Vite
+- **Components** — Mantine v7
+- **Desktop shell** — Tauri v2
+- **GIF processing** — Rust (`gif`, `color_quant`, `rayon`)
+- **Serialization** — `serde` / `serde_json`
 
 ---
 
-## 📁 Filename Schema (Batch)
+## Filename Schema (Batch) 📁
 
 The output filename for batch exports can be customized using tokens:
 
-| Token | Meaning |
-|-------|---------|
-| `{name}` | Original filename without `.gif` |
-| `{date}` | Date in `YYYY-MM-DD` format |
-| `{index}` | Position in the queue (1-based) |
+- `{name}` — original filename without `.gif`
+- `{date}` — date in `YYYY-MM-DD` format
+- `{index}` — position in the queue (1-based)
 
 Example: `{name}_recolored_{date}.gif` → `animation_recolored_2026-05-25.gif`
 
 ---
 
-## 📄 License
+## Feedback & Contributions
+
+Found a bug or have a feature idea? Feel free to [open an issue](https://github.com/Dav1d-Fn/gif-color-changer/issues) or reach out!
+
+---
+
+## License 📄
 
 MIT
