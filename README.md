@@ -120,4 +120,4 @@ Found a bug or have a feature idea? Feel free to [open an issue](https://github.
 
 ## License 📄
 
-MIT
+[GPL-3.0](LICENSE) — if you build something with this code, your project has to stay open source too.

@@ -2,6 +2,7 @@
 name = "gif-color-changer"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
 
 [lib]
 name = "gif_color_changer_lib"
