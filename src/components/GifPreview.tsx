@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { t } from "../i18n";
 
 interface GifPreviewProps {
   src: string | null;
@@ -31,8 +32,8 @@ export function GifPreview({ src, label, eyedropperActive = false, onColorPicked
     <>
       <canvas ref={canvasRef} style={{ display: "none" }} />
       {src
-        ? <img ref={imgRef} src={src} alt={label ?? "GIF preview"} onClick={handleClick} />
-        : <span className="preview-placeholder">{label ?? "Keine GIF geladen"}</span>
+        ? <img ref={imgRef} src={src} alt={label ?? t("gif_preview_alt")} onClick={handleClick} />
+        : <span className="preview-placeholder">{label ?? t("no_gif_loaded")}</span>
       }
     </>
   );

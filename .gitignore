@@ -22,5 +22,11 @@ Thumbs.db
 # Logs
 *.log
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local Claude Code settings (personal, machine-specific)
+.claude/settings.local.json
+
 # Graphify knowledge graph output
 graphify-out/

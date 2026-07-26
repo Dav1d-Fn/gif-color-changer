@@ -7,13 +7,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tauri::ipc::Channel;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct RgbColor {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColorMapping {
@@ -343,39 +336,6 @@ fn rgba_to_gif_frame(rgba: &[u8], width: u16, height: u16, delay_cs: u16) -> gif
     frame
 }
 
-#[tauri::command]
-fn extract_gif_colors(file_path: String, tolerance: u32) -> Result<Vec<RgbColor>, String> {
-    let t = std::time::Instant::now();
-
-    let decoded = decode_to_rgba_frames(&file_path)?;
-    let tol_sq = tolerance * tolerance;
-    let mut found: Vec<(u8, u8, u8)> = Vec::new();
-
-    for (rgba, _) in &decoded.frames {
-        for pixel in rgba.chunks(4) {
-            let (r, g, b, a) = (pixel[0], pixel[1], pixel[2], pixel[3]);
-            if a == 0 {
-                continue;
-            }
-            if !found
-                .iter()
-                .any(|&(cr, cg, cb)| dist_sq(r, g, b, cr, cg, cb) <= tol_sq)
-            {
-                found.push((r, g, b));
-            }
-        }
-    }
-
-    let result: Vec<RgbColor> = found.into_iter().map(|(r, g, b)| RgbColor { r, g, b }).collect();
-    eprintln!(
-        "[bench] extract_gif_colors: {}ms ({} frames, {} colors)",
-        t.elapsed().as_millis(),
-        decoded.frames.len(),
-        result.len()
-    );
-    Ok(result)
-}
-
 #[derive(serde::Serialize, Clone)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ProgressEvent {
@@ -678,7 +638,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
-            extract_gif_colors,
             apply_color_changes,
             preview_affected,
             get_gif_frame_count,

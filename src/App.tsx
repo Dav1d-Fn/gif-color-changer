@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader, Progress } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { invoke, Channel } from "@tauri-apps/api/core";
@@ -6,7 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { GifPreview } from "./components/GifPreview";
-import { ColorEntryList, ColorEntry, RgbColor } from "./components/ColorEntryList";
+import { ColorEntryList, ColorEntry } from "./components/ColorEntryList";
 import { Toggle, RangeSlider } from "./components/ui";
 import { BatchTab } from "./components/BatchTab";
 import { SettingsTab } from "./components/SettingsTab";
@@ -45,6 +45,23 @@ function SettingsIcon() {
   );
 }
 
+// ── Play / pause icons ──────────────────────────────────────────────────────────
+function PlayIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z"/>
+    </svg>
+  );
+}
+function PauseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="5" width="4" height="14"/>
+      <rect x="14" y="5" width="4" height="14"/>
+    </svg>
+  );
+}
+
 const NAV_ITEMS: Array<{ tab: "home" | "batch" | "settings"; icon: JSX.Element; labelKey: "sidebar_home" | "sidebar_batch" | "sidebar_settings" }> = [
   { tab: "home",     icon: <HomeIcon />,     labelKey: "sidebar_home" },
   { tab: "batch",    icon: <BatchIcon />,    labelKey: "sidebar_batch" },
@@ -63,9 +80,6 @@ export default function App() {
     () => (localStorage.getItem("lang") as "de" | "en" | "fr" | "es") ||
           (navigator.language.startsWith("de") ? "de" : "en")
   );
-  const [settingsDefaultTol, setSettingsDefaultTol] = useState(
-    () => Number(localStorage.getItem("defaultTol") ?? 35)
-  );
   const [settingsLivePreview, setSettingsLivePreview] = useState(
     () => localStorage.getItem("livePreview") !== "false"
   );
@@ -82,16 +96,13 @@ export default function App() {
   // ── Home state ──────────────────────────────────────────────────────────────
   const [originalGifPath,  setOriginalGifPath]  = useState<string | null>(null);
   const [originalGifData,  setOriginalGifData]  = useState<string | null>(null);
-  const [gifColors,        setGifColors]        = useState<RgbColor[]>([]);
   const [colorEntries,     setColorEntries]     = useState<ColorEntry[]>([]);
   const [addPanelOpen,     setAddPanelOpen]     = useState(false);
   const [pendingColors,    setPendingColors]    = useState<string[]>([]);
   const [eyedropperActive, setEyedropperActive] = useState(false);
-  const [gifTolerance,     setGifTolerance]     = useState(settingsDefaultTol);
   const [modifiedGifData,  setModifiedGifData]  = useState<string | null>(null);
   const [previewData,      setPreviewData]      = useState<string | null>(null);
   const [gifLoading,       setGifLoading]       = useState(false);
-  const [colorsLoading,    setColorsLoading]    = useState(false);
   const [applyLoading,     setApplyLoading]     = useState(false);
   const [applyProgress,    setApplyProgress]    = useState<{ current: number; total: number; phase: "transform" | "encode" } | null>(null);
   const [previewLoading,   setPreviewLoading]   = useState(false);
@@ -100,6 +111,9 @@ export default function App() {
   const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
   const [sliderFrameIndex,  setSliderFrameIndex]  = useState(0);
   const [previewModeActive, setPreviewModeActive] = useState(false);
+  const [isPlaying,        setIsPlaying]        = useState(true);
+  const [originalFrameData, setOriginalFrameData] = useState<string | null>(null);
+  const [originalFrameLoading, setOriginalFrameLoading] = useState(false);
   const [previewTrigger,   setPreviewTrigger]   = useState(0);
   const liveEntriesRef = useRef<ColorEntry[] | null>(null);
   const [originalGifFilename, setOriginalGifFilename] = useState<string | null>(null);
@@ -126,7 +140,6 @@ export default function App() {
     const next = LANG_CYCLE[(LANG_CYCLE.indexOf(settingsLang) + 1) % LANG_CYCLE.length];
     updateLang(next);
   }
-  function updateDefaultTol(v: number) { setSettingsDefaultTol(v); localStorage.setItem("defaultTol", String(v)); }
   function updateLivePreview(v: boolean) { setSettingsLivePreview(v); localStorage.setItem("livePreview", String(v)); }
   function updateExportFolder(v: string) { setSettingsExportFolder(v); localStorage.setItem("exportFolder", v); }
   function updateFileSchema(v: string)   { setSettingsFileSchema(v);   localStorage.setItem("fileSchema",   v); }
@@ -148,21 +161,9 @@ export default function App() {
     appWindow.startDragging();
   }
 
-  const isLoading = gifLoading || colorsLoading;
+  const isLoading = gifLoading;
   const hasGif    = !!originalGifData;
   const hasFrames = gifFrameCount !== null && gifFrameCount > 1;
-
-  // ── GIF tolerance ───────────────────────────────────────────────────────────
-  const handleGifToleranceChange = useCallback(async (tol: number) => {
-    setGifTolerance(tol);
-    if (!originalGifPath) return;
-    setColorsLoading(true);
-    try {
-      const colors = await invoke<RgbColor[]>("extract_gif_colors", { filePath: originalGifPath, tolerance: tol });
-      setGifColors(colors);
-    } catch { /* silent */ }
-    finally { setColorsLoading(false); }
-  }, [originalGifPath]);
 
   // ── Open file ───────────────────────────────────────────────────────────────
   async function handleOpenFile() {
@@ -180,15 +181,12 @@ export default function App() {
       setGifFrameCount(null);
       setGifMinDim(null);
       setPreviewFrameIndex(0);
+      setSliderFrameIndex(0);
       setPreviewModeActive(false);
-      setColorEntries([]);
+      setIsPlaying(true);
       setAddPanelOpen(false);
       setEyedropperActive(false);
-      const [colors, info] = await Promise.all([
-        invoke<RgbColor[]>("extract_gif_colors", { filePath: selected, tolerance: gifTolerance }),
-        invoke<{ width: number; height: number; frameCount: number }>("get_gif_info", { filePath: selected }),
-      ]);
-      setGifColors(colors);
+      const info = await invoke<{ width: number; height: number; frameCount: number }>("get_gif_info", { filePath: selected });
       setGifFrameCount(info.frameCount);
       setGifMinDim(Math.min(info.width, info.height));
     } catch (err) {
@@ -242,6 +240,37 @@ export default function App() {
   function handlePreviewUpdate(entries: ColorEntry[] | null) {
     liveEntriesRef.current = entries;
     setPreviewTrigger(n => n + 1);
+  }
+
+  // ── Original frame sync (paused mode) ───────────────────────────────────────
+  // Comparing against a specific frame only makes sense while paused, so live
+  // preview forces a pause — otherwise the Original panel keeps animating while
+  // the Modified panel is frozen on one frame.
+  useEffect(() => {
+    if (previewModeActive) setIsPlaying(false);
+  }, [previewModeActive]);
+
+  useEffect(() => {
+    if (isPlaying || !originalGifPath || !hasFrames) {
+      setOriginalFrameData(null);
+      setOriginalFrameLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setOriginalFrameLoading(true);
+    invoke<string>("apply_frame", { filePath: originalGifPath, frameIndex: previewFrameIndex, mappings: [] })
+      .then(r => { if (!cancelled) setOriginalFrameData(r); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setOriginalFrameLoading(false); });
+    return () => { cancelled = true; };
+  }, [isPlaying, originalGifPath, hasFrames, previewFrameIndex]);
+
+  function toggleEyedropper() {
+    setEyedropperActive(v => {
+      const next = !v;
+      if (next) setIsPlaying(false);
+      return next;
+    });
   }
 
   // ── Apply ───────────────────────────────────────────────────────────────────
@@ -366,7 +395,7 @@ export default function App() {
     ? t("no_file")
     : `${colorEntries.length} ${t(colorEntries.length === 1 ? "color_singular" : "color_plural")} ${t("assigned")}${modifiedGifData ? "" : " · " + t("unsaved")}`;
 
-  const frameLabel = hasFrames ? `Frame ${sliderFrameIndex + 1} / ${gifFrameCount}` : "–";
+  const frameLabel = hasFrames ? t("frame_label", { current: sliderFrameIndex + 1, total: gifFrameCount! }) : "–";
 
   const applySubLabel = hasGif && colorEntries.length > 0
     ? `${colorEntries.length} ${t(colorEntries.length === 1 ? "rule_singular" : "rule_plural")} ${t("on_all_frames", { n: gifFrameCount ?? "?" })}`
@@ -478,16 +507,21 @@ export default function App() {
               <div className="preview-row">
                 <div className="preview-card">
                   <div className="preview-head">
-                    <span className="preview-label">Original</span>
-                    <span className="preview-meta">{hasGif ? "–" : ""}</span>
+                    <span className="preview-label">{t("preview_original")}</span>
+                    <span className="preview-meta">{!isPlaying && hasFrames ? frameLabel : hasGif ? "–" : ""}</span>
                   </div>
                   <div className={`preview-canvas${eyedropperActive ? " eyedropper" : ""}`}>
                     <GifPreview
-                      src={originalGifData}
+                      src={isPlaying ? originalGifData : (originalFrameData ?? originalGifData)}
                       label={t("preview_open")}
                       eyedropperActive={eyedropperActive}
                       onColorPicked={hex => { togglePendingColor(hex); }}
                     />
+                    {originalFrameLoading && (
+                      <div className="preview-loader">
+                        <Loader size="sm" color="white" />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -495,7 +529,7 @@ export default function App() {
                   <div className="preview-head">
                     <span style={{ display: "inline-flex", alignItems: "center" }}>
                       <span className="preview-dot" />
-                      <span className="preview-label">Modified</span>
+                      <span className="preview-label">{t("preview_modified")}</span>
                     </span>
                     <span className="preview-meta">{hasFrames ? frameLabel : ""}</span>
                   </div>
@@ -520,11 +554,19 @@ export default function App() {
                 />
                 <div className="controls-divider" />
                 <div className="frame-control">
+                  <button
+                    className="icon-btn"
+                    title={isPlaying ? t("pause") : t("play")}
+                    disabled={!hasFrames || previewModeActive}
+                    onClick={() => setIsPlaying(v => !v)}
+                  >
+                    {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                  </button>
                   <RangeSlider
                     value={sliderFrameIndex}
                     min={0}
                     max={hasFrames ? (gifFrameCount! - 1) : 0}
-                    disabled={!hasFrames}
+                    disabled={!hasFrames || isPlaying}
                     onChange={setSliderFrameIndex}
                     onChangeEnd={v => { setSliderFrameIndex(v); setPreviewFrameIndex(v); }}
                   />
@@ -538,20 +580,23 @@ export default function App() {
               {hasGif && (
                 <ColorEntryList
                   entries={colorEntries}
-                  gifColors={gifColors}
-                  colorsLoading={colorsLoading}
-                  tolerance={gifTolerance}
-                  onToleranceChange={handleGifToleranceChange}
                   onRemove={id => setColorEntries(prev => prev.filter(e => e.id !== id))}
                   onUpdate={handleUpdateEntry}
                   addPanelOpen={addPanelOpen}
-                  onToggleAddPanel={() => { setAddPanelOpen(v => !v); setEyedropperActive(false); }}
+                  onOpenAddPanel={() => {
+                    setAddPanelOpen(true);
+                    setEyedropperActive(false);
+                  }}
+                  onCloseAddPanel={() => {
+                    setAddPanelOpen(false);
+                    setEyedropperActive(false);
+                  }}
                   pendingColors={pendingColors}
                   onTogglePendingColor={togglePendingColor}
                   onSetPendingColors={setPendingColors}
                   onConfirmAdd={handleConfirmAdd}
                   eyedropperActive={eyedropperActive}
-                  onToggleEyedropper={() => setEyedropperActive(v => !v)}
+                  onToggleEyedropper={toggleEyedropper}
                   gifLoaded={hasGif}
                   gifMinDim={gifMinDim}
                   onPreviewUpdate={handlePreviewUpdate}
@@ -627,8 +672,6 @@ export default function App() {
             <SettingsTab
               lang={settingsLang}
               onLangChange={updateLang}
-              defaultTol={settingsDefaultTol}
-              onDefaultTolChange={updateDefaultTol}
               livePreviewDefault={settingsLivePreview}
               onLivePreviewDefaultChange={updateLivePreview}
               exportFolder={settingsExportFolder}

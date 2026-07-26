@@ -1,12 +1,10 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { RangeSlider, Toggle } from "./ui";
+import { Toggle } from "./ui";
 import { t } from "../i18n";
 
 interface SettingsTabProps {
   lang: "de" | "en" | "fr" | "es";
   onLangChange: (l: "de" | "en" | "fr" | "es") => void;
-  defaultTol: number;
-  onDefaultTolChange: (v: number) => void;
   livePreviewDefault: boolean;
   onLivePreviewDefaultChange: (v: boolean) => void;
   exportFolder: string;
@@ -53,7 +51,6 @@ function FolderIcon() {
 
 export function SettingsTab({
   lang, onLangChange,
-  defaultTol, onDefaultTolChange,
   livePreviewDefault, onLivePreviewDefaultChange,
   exportFolder, onExportFolderChange,
   fileSchema, onFileSchemaChange,
@@ -90,17 +87,6 @@ export function SettingsTab({
               labels={["DE", "EN", "FR", "ES"]}
               onChange={onLangChange}
             />
-          </div>
-        </div>
-
-        {/* Standard-Toleranz */}
-        <div className="settings-row">
-          <span className="settings-label">{t("settings_default_tol")}</span>
-          <div className="settings-control">
-            <div className="settings-slider-group">
-              <RangeSlider value={defaultTol} min={0} max={100} onChange={onDefaultTolChange} onChangeEnd={onDefaultTolChange} />
-              <span className="settings-slider-num">{defaultTol}</span>
-            </div>
           </div>
         </div>
 

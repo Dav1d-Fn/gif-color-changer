@@ -311,7 +311,7 @@ export function BatchTab({
                       <div className="file-name">{f.name}</div>
                       <div className="file-info">
                         {f.info
-                          ? `${f.info.width}×${f.info.height} · ${f.info.frameCount} Frames${f.size ? ` · ${formatBytes(f.size)}` : ""}`
+                          ? `${f.info.width}×${f.info.height} · ${t("frames_count", { n: f.info.frameCount })}${f.size ? ` · ${formatBytes(f.size)}` : ""}`
                           : f.size ? formatBytes(f.size) : "…"}
                       </div>
                     </div>
@@ -371,7 +371,7 @@ export function BatchTab({
                       <div key={hex} className="rule-mini-swatch" style={{ backgroundColor: hex }} />
                     ))}
                     <span className="hex-label" style={{ fontSize: 11.5 }}>
-                      {e.sourceHexes.length === 1 ? e.sourceHexes[0].toUpperCase() : `${e.sourceHexes.length} Farben`}
+                      {e.sourceHexes.length === 1 ? e.sourceHexes[0].toUpperCase() : t("colors_count", { n: e.sourceHexes.length })}
                     </span>
                     <span className="arrow">→</span>
                     {e.transparent ? (
@@ -380,7 +380,7 @@ export function BatchTab({
                       <div className="rule-mini-swatch" style={{ backgroundColor: e.replHex }} />
                     )}
                     <span className="hex-label" style={{ fontSize: 11.5 }}>
-                      {e.transparent ? "transparent" : e.replHex.toUpperCase()}
+                      {e.transparent ? t("transparent_label") : e.replHex.toUpperCase()}
                     </span>
                     <span className="row-meta" style={{ marginLeft: "auto", fontSize: 10.5 }}>
                       {t("tol_prefix")} {e.tolerance}
