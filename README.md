@@ -112,6 +112,14 @@ Example: `{name}_recolored_{date}.gif` → `animation_recolored_2026-05-25.gif`
 
 ---
 
+## Donations 💖
+
+If you enjoy using GIF Color Changer and want to support its development, you can buy me a coffee:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/davidfn)
+
+---
+
 ## Feedback & Contributions
 
 Found a bug or have a feature idea? Feel free to [open an issue](https://github.com/Dav1d-Fn/gif-color-changer/issues) or reach out!
